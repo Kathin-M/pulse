@@ -97,7 +97,7 @@ fun InsightsScreen(onBack: () -> Unit) {
     fun load() = scope.launch { runCatching { Api.get<Insights>("/api/insights") }.onSuccess { d = it } }
     LaunchedEffect(Unit) { load() }
 
-    LazyColumn(Modifier.fillMaxSize().background(c.bg), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp)) {
+    LazyColumn(Modifier.fillMaxSize().background(c.bg), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
         item {
             TextLink("‹ Controls", modifier = Modifier.padding(top = 8.dp), onClick = onBack)
             Text("Insights", style = Type.title, color = c.text, modifier = Modifier.padding(top = 4.dp))

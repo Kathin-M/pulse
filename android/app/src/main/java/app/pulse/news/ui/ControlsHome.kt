@@ -95,7 +95,7 @@ private fun NavRow(title: String, detail: String, last: Boolean = false, onClick
 private fun SubPage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val c = LocalColors.current
     BackHandler { onBack() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
         item {
             TextLink("‹ Controls", modifier = Modifier.padding(top = 8.dp), onClick = onBack)
             Text(title, style = Type.title, color = c.text, modifier = Modifier.padding(bottom = 14.dp))
@@ -327,7 +327,7 @@ fun ControlsScreen(onInsights: () -> Unit, onOnboarding: () -> Unit, onLogout: (
             }
         }
 
-        Page.Home -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Page.Home -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Text("Controls", style = Type.title, color = c.text, modifier = Modifier.padding(top = 12.dp)) }
             item {
                 GlassCard(Modifier.clickable { onInsights() }) {

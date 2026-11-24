@@ -25,7 +25,7 @@ class PulseApp : Application(), ImageLoaderFactory {
     // News images: browser-like user agent (some CDNs block default clients), no referrer, disk cache.
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .okHttpClient {
-            OkHttpClient.Builder().addInterceptor { chain ->
+            OkHttpClient.Builder().dns(app.pulse.news.data.ResilientDns).addInterceptor { chain ->
                 chain.proceed(
                     chain.request().newBuilder()
                         .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36")

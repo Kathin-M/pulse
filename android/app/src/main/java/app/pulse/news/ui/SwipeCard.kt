@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -155,7 +156,7 @@ fun SwipeCard(
                     rotationZ = (x / w * 8f).coerceIn(-8f, 8f)
                 }
         ) {
-            CardView(card, onChip = onChip, onWhy = onWhy, rail = onAction != null)
+            CardView(card, onChip = onChip, onWhy = onWhy, rail = onAction != null, fullBleed = true)
             if (onAction != null) {
                 ActionRail(
                     card = card,
@@ -164,7 +165,7 @@ fun SwipeCard(
                     onSave = { on -> onAction(if (on) "save" else "unsave") },
                     onShare = { onAction("share") },
                     onSources = { onAction("sources") },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 150.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 10.dp, bottom = 240.dp),
                 )
             }
 

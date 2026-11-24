@@ -140,7 +140,7 @@ fun SeenScreen(onOpen: (Int) -> Unit) {
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
         item {
             Row(Modifier.padding(top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.Bottom) {
                 Text("Seen", style = Type.title, color = c.text)
@@ -207,7 +207,7 @@ fun LikedScreen(onOpen: (Int) -> Unit) {
         cards = runCatching { Api.get<CardsResponse>("/api/liked?q=${Api.q(q)}").cards }.getOrElse { emptyList() }
     }
     val shown = cards.orEmpty().filter { filter == "all" || (filter == "saved" && it.saved) || (filter == "liked" && it.liked) }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
         item {
             Text("Liked", style = Type.title, color = c.text, modifier = Modifier.padding(top = 12.dp, bottom = 12.dp))
             SearchField(q, { q = it }, "Search your library")

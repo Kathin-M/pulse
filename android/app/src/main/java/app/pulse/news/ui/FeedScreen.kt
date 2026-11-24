@@ -35,6 +35,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import app.pulse.news.data.Api
 import app.pulse.news.data.Card
 import app.pulse.news.data.FeedResponse
@@ -71,8 +79,8 @@ fun CardStack(
     Box(Modifier.fillMaxSize()) {
         if (next != null) {
             key("peek-${next.id}") {
-                Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 0.96f; scaleY = 0.96f; translationY = 28f }.alpha(0.7f)) {
-                    CardView(next)
+                Box(Modifier.fillMaxSize().graphicsLayer { scaleX = 0.94f; scaleY = 0.94f }.alpha(0.6f)) {
+                    CardView(next, fullBleed = true)
                 }
             }
         }
@@ -239,34 +247,16 @@ fun FeedScreen(
 
     val modes = listOf("foryou" to "For you", "local" to "Local", "following" to "Following")
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    Column(Modifier.fillMaxSize()) {
-        // top bar: glass segmented control + glass undo, with a thin progress line and counter
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).alpha(if (dragging) 0f else 1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassSegmented(
-                    options = modes.map { it.second },
-                    selected = modes.indexOfFirst { it.first == mode },
-                    onSelect = { mode = modes[it].first },
-                    modifier = Modifier.weight(1f),
-                )
-                GlassIconButton(PulseIcons.Undo, "Undo last swipe", enabled = undo.isNotEmpty()) { doUndo() }
-            }
-            Row(Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(50)).background(c.divider.copy(alpha = 0.7f))) {
-                    Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(50)).background(c.accent))
-                }
-                if (total > 0) Text("${minOf(done + 1, total)} / $total", style = Type.chip, color = c.text2, modifier = Modifier.padding(start = 10.dp))
-            }
-        }
-        if (offline && queue.isNotEmpty()) {
-            Text("Offline: showing your last feed", style = Type.chip, color = c.text2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp))
-        }
-
-        Box(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = if (Store.hints) 14.dp else 4.dp)) {
+    val feedBackdrop = rememberLayerBackdrop()
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(Modifier.fillMaxSize()) {
+        // full-screen cards, recorded so the floating top bar can refract them
+        Box(Modifier.fillMaxSize().layerBackdrop(feedBackdrop).background(c.bg)) {
             when {
-                !loaded -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(c.surface))
+                !loaded -> Box(Modifier.fillMaxSize().background(c.surface))
                 error != null && queue.isEmpty() && !offline -> Column(
-                    Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(c.surface).padding(28.dp),
+                    Modifier.fillMaxSize().background(c.surface).padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
                 ) {
                     Text("Can't reach Pulse", style = Type.headline, color = c.text)
@@ -300,12 +290,42 @@ fun FeedScreen(
                             }
                         }
                     },
-                    empty = { CaughtUp(sessionStart, done == 0, mode, ingest, offline && queue.isEmpty(), onGoSeen) { load() } },
+                    empty = {
+                        Box(Modifier.fillMaxSize().padding(top = topInset + 76.dp, bottom = bottomInset + 90.dp, start = 12.dp, end = 12.dp)) {
+                            CaughtUp(sessionStart, done == 0, mode, ingest, offline && queue.isEmpty(), onGoSeen) { load() }
+                        }
+                    },
                 )
             }
-            if (Store.hints && queue.isNotEmpty()) SwipeHints(dragging, Modifier.matchParentSize())
         }
 
+        if (Store.hints && queue.isNotEmpty()) SwipeHints(dragging, Modifier.fillMaxSize().padding(top = topInset + 72.dp, bottom = bottomInset + 74.dp))
+
+        // floating liquid-glass top bar over the story
+        CompositionLocalProvider(LocalBackdrop provides feedBackdrop) {
+            Column(Modifier.fillMaxWidth().padding(top = topInset).padding(horizontal = 12.dp, vertical = 6.dp).alpha(if (dragging) 0f else 1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassSegmented(
+                        options = modes.map { it.second },
+                        selected = modes.indexOfFirst { it.first == mode },
+                        onSelect = { mode = modes[it].first },
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlassIconButton(PulseIcons.Undo, "Undo last swipe", enabled = undo.isNotEmpty()) { doUndo() }
+                }
+                Row(Modifier.padding(top = 8.dp, start = 6.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f))) {
+                        Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(50)).background(c.accent))
+                    }
+                    if (total > 0) Text(
+                        "${minOf(done + 1, total)} / $total",
+                        style = Type.chip.copy(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 6f)),
+                        color = Color.White, modifier = Modifier.padding(start = 10.dp),
+                    )
+                }
+                if (offline && queue.isNotEmpty()) Text("Offline: showing your last feed", style = Type.chip, color = Color.White, modifier = Modifier.padding(top = 4.dp, start = 6.dp))
+            }
+        }
     }
 
     chip?.let { ChipSheet(it) { chip = null } }

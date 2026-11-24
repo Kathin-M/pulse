@@ -36,8 +36,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import android.os.Build
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -59,10 +66,10 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /*
- * Liquid-glass components for Compose, modelled on @sasivisvan/glass-morphism
- * (https://github.com/Sasivisvan/Glass-Morphism, MIT): same materials (tint, rim gradient lit at
- * 135°, inner highlight, soft shadow) and the same "droplet" selection for segmented controls and
- * tab bars, which swells into a lens while pressed.
+ * Liquid-glass components. Refraction, frost and specular highlights come from the backdrop
+ * library (https://github.com/Kyant0/AndroidLiquidGlass, Apache-2.0); the component designs follow
+ * Glass-Morphism (https://github.com/Sasivisvan/Glass-Morphism, MIT): a "droplet" selection for
+ * segmented controls and tab bars that swells into a lens while pressed.
  */
 
 /** iOS-style overshoot, the library's --lg-ease: cubic-bezier(.3, 1.4, .4, 1). */
@@ -86,10 +93,48 @@ fun rimBrush(strength: Float = GlassTokens.rimStrength()): Brush = Brush.linearG
     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
 )
 
-/** Glass material. Respects the "Glass effects" setting: full, light (no shadow/glow) or off (flat, solid). */
+/**
+ * The backdrop that floating glass refracts. Provided around overlay layers (top bar, tab bar,
+ * login card) whose content underneath is recorded with Modifier.layerBackdrop. Null elsewhere,
+ * where glass falls back to a tinted surface.
+ */
+val LocalBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+
+/**
+ * Glass material. With a backdrop (Android 12+) it is real liquid glass via the backdrop library:
+ * "full" = lens refraction + light frost + specular highlight, "light" = frosted blur only.
+ * "off" (or no backdrop) = a tinted surface; "off" is flat and solid.
+ */
 fun Modifier.glass(shape: Shape, tint: Color, rim: Brush, elevation: Dp = 10.dp, indicator: Boolean = false): Modifier = composed {
     val c = LocalColors.current
-    when (app.pulse.news.data.Store.glass) {
+    val backdrop = LocalBackdrop.current
+    val mode = app.pulse.news.data.Store.glass
+    if (backdrop != null && mode != "off" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val surface = when {
+            indicator && c.dark -> Color.White.copy(alpha = 0.12f)
+            indicator -> Color.White.copy(alpha = 0.5f)
+            c.dark -> Color.Black.copy(alpha = 0.16f)
+            else -> Color.White.copy(alpha = 0.28f)
+        }
+        this.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                if (mode == "full") {
+                    blur(3f.dp.toPx())
+                    lens(
+                        (if (indicator) 10f else 16f).dp.toPx(),
+                        (if (indicator) 18f else 32f).dp.toPx(),
+                        chromaticAberration = !indicator,
+                    )
+                } else {
+                    blur(16f.dp.toPx())
+                }
+            },
+            onDrawSurface = { drawRect(surface) },
+        )
+    } else when (mode) {
         "off" -> this.clip(shape).background(if (indicator) tint else c.raised)
         "light" -> this.clip(shape).background(tint).border(1.dp, rim, shape)
         else -> this
@@ -137,7 +182,21 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
                             .clickable(interactionSource = interaction, indication = null) { onSelect(i) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, style = Type.meta.copy(fontWeight = FontWeight.SemiBold), color = if (i == selected) c.text else c.text2)
+                        // over a photo (refracting a backdrop) labels are white with a soft shadow, so they read on any image
+                        val onPhoto = LocalBackdrop.current != null && app.pulse.news.data.Store.glass != "off"
+                        Text(
+                            label,
+                            style = Type.meta.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                shadow = if (onPhoto) androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.55f), blurRadius = 8f) else null,
+                            ),
+                            color = when {
+                                onPhoto && i == selected -> Color.White
+                                onPhoto -> Color.White.copy(alpha = 0.82f)
+                                i == selected -> c.text
+                                else -> c.text2
+                            },
+                        )
                     }
                 }
             }
@@ -192,7 +251,12 @@ fun GlassIconButton(icon: ImageVector, contentDescription: String, enabled: Bool
         Modifier.size(size).scale(s).clickable(enabled = enabled, interactionSource = interaction, indication = null) { onClick() },
         shape = CircleShape,
     ) {
-        Icon(icon, contentDescription, tint = if (enabled) c.text else c.text2.copy(alpha = 0.4f), modifier = Modifier.align(Alignment.Center).size(20.dp))
+        val onPhoto = LocalBackdrop.current != null && app.pulse.news.data.Store.glass != "off"
+        Icon(icon, contentDescription, tint = when {
+            !enabled -> (if (onPhoto) Color.White else c.text2).copy(alpha = 0.45f)
+            onPhoto -> Color.White
+            else -> c.text
+        }, modifier = Modifier.align(Alignment.Center).size(20.dp))
     }
 }
 

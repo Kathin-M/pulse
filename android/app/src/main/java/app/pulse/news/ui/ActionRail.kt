@@ -86,11 +86,11 @@ private fun RailButton(icon: ImageVector, label: String, light: Boolean, tint: C
 fun SwipeHints(dragging: Boolean, modifier: Modifier = Modifier) {
     val a by animateFloatAsState(if (dragging) 0f else 1f, label = "hints")
     Box(modifier.padding(horizontal = 0.dp)) {
-        // seated astride the card edges (half outside) so they never cover the story
-        Hint("↑ Fine", Modifier.align(Alignment.TopCenter).offset(y = (-13).dp), a)
-        Hint("↓ Less", Modifier.align(Alignment.BottomCenter).offset(y = 13.dp), a)
-        Hint("‹ Seen", Modifier.align(Alignment.CenterStart).offset(x = (-8).dp), a)
-        Hint("More ›", Modifier.align(Alignment.TopEnd).padding(top = 110.dp).offset(x = 8.dp), a)
+        // in the gaps between the glass bars and the story text
+        Hint("↑ Fine", Modifier.align(Alignment.TopCenter), a)
+        Hint("↓ Less", Modifier.align(Alignment.BottomCenter), a)
+        Hint("‹ Seen", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), a)
+        Hint("More ›", Modifier.align(Alignment.TopEnd).padding(top = 90.dp, end = 8.dp), a)
     }
 }
 

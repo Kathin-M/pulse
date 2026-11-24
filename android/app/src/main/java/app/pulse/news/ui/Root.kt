@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -54,6 +55,8 @@ import app.pulse.news.data.Controls
 import app.pulse.news.data.OkResponse
 import app.pulse.news.data.Store
 import app.pulse.news.update.Updater
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -106,14 +109,18 @@ fun LoginScreen(onDone: () -> Unit) {
         }
     }
 
-    Box(
-        Modifier.fillMaxSize().background(
-            androidx.compose.ui.graphics.Brush.radialGradient(
-                listOf(c.accent.copy(alpha = 0.22f), androidx.compose.ui.graphics.Color.Transparent),
-                center = androidx.compose.ui.geometry.Offset(150f, 300f), radius = 1100f,
-            )
-        )
-    ) {
+    val loginBackdrop = rememberLayerBackdrop()
+    Box(Modifier.fillMaxSize()) {
+        // colourful backdrop for the glass card to refract
+        Box(Modifier.fillMaxSize().layerBackdrop(loginBackdrop).background(c.bg)) {
+            Box(Modifier.size(320.dp).offset(x = (-60).dp, y = 120.dp).background(
+                androidx.compose.ui.graphics.Brush.radialGradient(listOf(c.accent, c.accent.copy(alpha = 0f))), androidx.compose.foundation.shape.CircleShape))
+            Box(Modifier.size(280.dp).align(Alignment.CenterEnd).offset(x = 80.dp, y = 40.dp).background(
+                androidx.compose.ui.graphics.Brush.radialGradient(listOf(c.more.copy(alpha = 0.8f), c.more.copy(alpha = 0f))), androidx.compose.foundation.shape.CircleShape))
+            Box(Modifier.size(260.dp).align(Alignment.BottomStart).offset(x = 40.dp, y = (-90).dp).background(
+                androidx.compose.ui.graphics.Brush.radialGradient(listOf(androidx.compose.ui.graphics.Color(0xFF5B8CFF), androidx.compose.ui.graphics.Color(0x005B8CFF))), androidx.compose.foundation.shape.CircleShape))
+        }
+        androidx.compose.runtime.CompositionLocalProvider(LocalBackdrop provides loginBackdrop) {
         // scrolls instead of squashing the card when the keyboard opens
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
         Column(
@@ -151,6 +158,7 @@ fun LoginScreen(onDone: () -> Unit) {
                     if (!showServer) TextLink("Use a different Pulse server", modifier = Modifier.align(Alignment.CenterHorizontally)) { showServer = true }
                 }
             }
+        }
         }
         }
     }
@@ -239,24 +247,27 @@ fun MainScreen(onLogout: () -> Unit) {
 
     if (onboarding) { OnboardingScreen { onboarding = false; tab = Tab.Feed }; return }
 
+    val c2 = LocalColors.current
+    val mainBackdrop = rememberLayerBackdrop()
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Box(Modifier.weight(1f)) {
-                when (tab) {
-                    Tab.Feed -> FeedScreen(
-                        onOpen = { detail = it },
-                        onOpenThread = { thread = it },
-                        onNeedsOnboarding = { onboarding = true },
-                        onDragging = { dragging = it },
-                        onGoSeen = { tab = Tab.Seen },
-                        onGoControls = { tab = Tab.Controls },
-                    )
-                    Tab.Seen -> SeenScreen(onOpen = { detail = it })
-                    Tab.Liked -> LikedScreen(onOpen = { detail = it })
-                    Tab.Controls -> ControlsScreen(onInsights = { insights = true }, onOnboarding = { onboarding = true }, onLogout = onLogout)
-                }
+        // everything under the floating tab bar is recorded, so the tab bar can refract it
+        Box(Modifier.fillMaxSize().layerBackdrop(mainBackdrop).background(c2.bg)) {
+            when (tab) {
+                Tab.Feed -> FeedScreen(
+                    onOpen = { detail = it },
+                    onOpenThread = { thread = it },
+                    onNeedsOnboarding = { onboarding = true },
+                    onDragging = { dragging = it },
+                    onGoSeen = { tab = Tab.Seen },
+                    onGoControls = { tab = Tab.Controls },
+                )
+                Tab.Seen -> Box(Modifier.statusBarsPadding()) { SeenScreen(onOpen = { detail = it }) }
+                Tab.Liked -> Box(Modifier.statusBarsPadding()) { LikedScreen(onOpen = { detail = it }) }
+                Tab.Controls -> Box(Modifier.statusBarsPadding()) { ControlsScreen(onInsights = { insights = true }, onOnboarding = { onboarding = true }, onLogout = onLogout) }
             }
-            // floating glass tab bar, within thumb reach; fades while you swipe
+        }
+        // floating liquid-glass tab bar, within thumb reach; fades while you swipe
+        androidx.compose.runtime.CompositionLocalProvider(LocalBackdrop provides mainBackdrop) {
             GlassTabBar(
                 items = listOf(
                     TabItem("Feed", PulseIcons.Feed), TabItem("Seen", PulseIcons.Seen),
@@ -264,7 +275,8 @@ fun MainScreen(onLogout: () -> Unit) {
                 ),
                 selected = Tab.entries.indexOf(tab),
                 onSelect = { tab = Tab.entries[it] },
-                modifier = Modifier.fillMaxWidth().alpha(if (dragging) 0f else 1f).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().alpha(if (dragging) 0f else 1f)
+                    .navigationBarsPadding().padding(horizontal = 14.dp, vertical = 6.dp),
             )
         }
 

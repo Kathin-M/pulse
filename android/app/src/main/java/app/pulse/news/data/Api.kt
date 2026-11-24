@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.add
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +26,7 @@ object Api {
     private val JSON = "application/json".toMediaType()
 
     val http: OkHttpClient = OkHttpClient.Builder()
+        .dns(ResilientDns)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -93,4 +95,40 @@ object Api {
 
     suspend fun addRule(label: String, kind: String, mode: String): OkResponse =
         post("/api/rules", buildJsonObject { put("label", label); put("kind", kind); put("mode", mode) })
+}
+
+/**
+ * Some mobile networks fail to resolve certain hosts (e.g. *.vercel.app) at the DNS level.
+ * Try the phone's normal DNS first; if that fails, ask Cloudflare, then Google, over HTTPS.
+ */
+object ResilientDns : okhttp3.Dns {
+    private val bootstrap = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
+
+    private val cloudflare by lazy {
+        okhttp3.dnsoverhttps.DnsOverHttps.Builder().client(bootstrap)
+            .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+            .bootstrapDnsHosts(java.net.InetAddress.getByName("1.1.1.1"), java.net.InetAddress.getByName("1.0.0.1"))
+            .build()
+    }
+    private val google by lazy {
+        okhttp3.dnsoverhttps.DnsOverHttps.Builder().client(bootstrap)
+            .url("https://dns.google/dns-query".toHttpUrl())
+            .bootstrapDnsHosts(java.net.InetAddress.getByName("8.8.8.8"), java.net.InetAddress.getByName("8.8.4.4"))
+            .build()
+    }
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<List<java.net.InetAddress>, Long>>()
+
+    override fun lookup(hostname: String): List<java.net.InetAddress> {
+        cache[hostname]?.let { (addrs, at) -> if (System.currentTimeMillis() - at < 10 * 60_000) return addrs }
+        val system = runCatching { okhttp3.Dns.SYSTEM.lookup(hostname) }.getOrNull()
+        if (!system.isNullOrEmpty()) return system
+        for (resolver in listOf(cloudflare, google)) {
+            val addrs = runCatching { resolver.lookup(hostname) }.getOrNull()
+            if (!addrs.isNullOrEmpty()) {
+                cache[hostname] = addrs to System.currentTimeMillis()
+                return addrs
+            }
+        }
+        throw java.net.UnknownHostException("Couldn't find $hostname. Check your internet connection.")
+    }
 }

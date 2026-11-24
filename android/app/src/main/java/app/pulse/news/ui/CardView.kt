@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -154,10 +158,13 @@ private fun ThreadHeadlines(card: Card) {
 
 /** One story card in one of three layouts, picked from the lead image's quality at ingest. */
 @Composable
-fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Unit = {}, onWhy: () -> Unit = {}, rail: Boolean = false) {
+fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Unit = {}, onWhy: () -> Unit = {}, rail: Boolean = false, fullBleed: Boolean = false) {
     val railPad = if (rail) 64.dp else 20.dp
+    // full-screen cards sit under the floating glass top bar and tab bar: keep content clear of both
+    val topClear = if (fullBleed) WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp else 0.dp
+    val bottomClear = if (fullBleed) WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 88.dp else 0.dp
     val c = LocalColors.current
-    val shape = RoundedCornerShape(20.dp)
+    val shape = if (fullBleed) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(20.dp)
     val edge = if (card.badge == "Breaking") Modifier.border(2.dp, c.accent, shape) else Modifier
     val title = card.displayTitle
     // The whole headline, always: long ones step down a size instead of being cut off.
@@ -171,8 +178,10 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
                     Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Black.copy(alpha = 0.6f), 1f to Color.Black.copy(alpha = 0.85f))
                 )
             )
-            Box(Modifier.padding(16.dp).align(Alignment.TopStart)) { Badge(card) }
-            Column(Modifier.fillMaxSize().padding(start = 20.dp, end = railPad, bottom = 20.dp, top = 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
+            if (fullBleed) Box(Modifier.fillMaxWidth().height(topClear + 40.dp).align(Alignment.TopCenter).background(
+                Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 1f to Color.Transparent)))
+            Box(Modifier.padding(start = 16.dp, top = topClear + 16.dp).align(Alignment.TopStart)) { Badge(card) }
+            Column(Modifier.fillMaxSize().padding(start = 20.dp, end = railPad, bottom = bottomClear + 20.dp, top = topClear + 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
                 SourceRow(card, light = true)
                 Text(title, style = headStyle, color = Color.White)
                 UpdateLine(card, light = true)
@@ -184,11 +193,11 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
         }
 
         card.layout == "photo" && card.image != null -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge)) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(if (title.length > 90) 0.28f else 0.36f)) {
+            Box(Modifier.fillMaxWidth().fillMaxHeight(if (title.length > 90) 0.34f else 0.42f)) {
                 NewsImage(card.image, card.lqip, Modifier.fillMaxSize())
-                Box(Modifier.padding(16.dp)) { Badge(card) }
+                Box(Modifier.padding(start = 16.dp, top = topClear + 16.dp)) { Badge(card) }
             }
-            Column(Modifier.weight(1f).padding(start = 20.dp, top = 20.dp, bottom = 20.dp, end = railPad), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f).padding(start = 20.dp, top = 20.dp, bottom = bottomClear + 12.dp, end = railPad), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SourceRow(card, light = false)
                 Text(title, style = Type.headline, color = c.text)
                 UpdateLine(card, light = false)
@@ -207,7 +216,7 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
         }
 
         // Text-only editorial card: the outlet name set large is the visual.
-        else -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge).padding(start = 24.dp, top = 24.dp, bottom = 24.dp, end = if (rail) 64.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        else -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge).padding(start = 24.dp, top = topClear + 24.dp, bottom = bottomClear + 24.dp, end = if (rail) 64.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Badge(card)
             Text(
                 card.publisher, fontFamily = Newsreader, fontWeight = FontWeight.SemiBold,
