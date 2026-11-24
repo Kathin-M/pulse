@@ -5,8 +5,8 @@ name: Ingest news
 # so forks and mirrors never run it (and never need secrets).
 on:
   schedule:
-    - cron: "30 0-17 * * *"   # hourly, 06:00–23:00 IST
-    - cron: "30 20,23 * * *"  # 02:00 and 05:00 IST
+    - cron: "17 0-17 * * *"   # hourly, 05:47–22:47 IST
+    - cron: "17 20,23 * * *"  # 01:47 and 04:47 IST
   workflow_dispatch:
 
 concurrency:
