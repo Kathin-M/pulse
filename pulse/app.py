@@ -9,7 +9,6 @@ import re
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -728,17 +727,12 @@ def app_latest():
     return {"releases": f"https://github.com/{repo}/releases/latest" if repo else None}
 
 
-# ------------------------------------------------------------------ static files (self-hosting only)
-_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
-if _dist.exists() and not os.environ.get("VERCEL"):
-    from fastapi.responses import FileResponse
-    from fastapi.staticfiles import StaticFiles
-
-    app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
-
-    @app.get("/{path:path}")
-    def spa(path: str):
-        f = _dist / path
-        if path and f.is_file():
-            return FileResponse(f)
-        return FileResponse(_dist / "index.html")
+# ------------------------------------------------------------------ root: send browsers to the Android app
+@app.get("/")
+def root():
+    """Pulse is an Android app; opening the server address in a browser leads to the download."""
+    from fastapi.responses import JSONResponse, RedirectResponse
+    repo = os.environ.get("PULSE_APP_REPO", "")
+    if repo:
+        return RedirectResponse(f"https://github.com/{repo}/releases/latest", status_code=302)
+    return JSONResponse({"name": "Pulse API", "ok": True})

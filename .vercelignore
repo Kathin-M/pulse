@@ -1,6 +1,6 @@
 .venv
 .cache
-web/node_modules
-web/dist
 worker
+android
 .env
+*.keystore

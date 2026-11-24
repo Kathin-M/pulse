@@ -9,10 +9,6 @@
 __pycache__/
 *.pyc
 .cache/
-# web
-web/node_modules/
-web/dist/
-web/dev-dist/
 # misc
 .DS_Store
 .env*
