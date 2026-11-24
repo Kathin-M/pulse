@@ -52,6 +52,9 @@ def require_auth(request: Request) -> None:
             raise HTTPException(503, "PULSE_PASSWORD is not configured on the server")
         return  # local dev without a password
     token = request.cookies.get(COOKIE)
+    auth = request.headers.get("authorization", "")
+    if not token and auth.lower().startswith("bearer "):
+        token = auth[7:].strip()   # native app
     if not token:
         raise HTTPException(401, "login required")
     try:
@@ -69,16 +72,18 @@ class LoginIn(BaseModel):
 
 
 @app.post("/api/login")
-def login(body: LoginIn, response: Response):
+def login(body: LoginIn, response: Response, request: Request):
     pw = _password()
     if not pw:
         if _hosted():
             raise HTTPException(503, "PULSE_PASSWORD is not configured on the server")
-        return {"ok": True}
+        return {"ok": True, "token": ""}
     if not hmac.compare_digest(body.password.encode(), pw.encode()):
         time.sleep(1.0)
         raise HTTPException(401, "wrong password")
     token = _signer().sign(b"owner").decode()
+    if request.headers.get("x-pulse-client"):
+        return {"ok": True, "token": token}   # native app keeps it in private storage
     response.set_cookie(COOKIE, token, max_age=COOKIE_AGE, httponly=True, secure=_hosted(), samesite="lax", path="/")
     return {"ok": True}
 
