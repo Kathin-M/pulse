@@ -70,6 +70,15 @@ object Store {
         get() = sp.getInt("brief_hour", 8)
         set(v) = sp.edit().putInt("brief_hour", v).apply()
 
+    /** Hosts this network can't resolve with normal DNS (resolved via DNS-over-HTTPS instead). */
+    val dohHosts: Set<String>
+        get() = if (::sp.isInitialized) sp.getStringSet("doh_hosts", emptySet()) ?: emptySet() else emptySet()
+
+    fun rememberDohHost(host: String) {
+        if (!::sp.isInitialized || host in dohHosts) return
+        sp.edit().putStringSet("doh_hosts", dohHosts + host).apply()
+    }
+
     var lastUpdateCheck: Long
         get() = sp.getLong("last_update_check", 0)
         set(v) = sp.edit().putLong("last_update_check", v).apply()

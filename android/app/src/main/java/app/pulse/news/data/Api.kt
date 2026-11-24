@@ -98,11 +98,14 @@ object Api {
 }
 
 /**
- * Some mobile networks fail to resolve certain hosts (e.g. *.vercel.app) at the DNS level.
- * Try the phone's normal DNS first; if that fails, ask Cloudflare, then Google, over HTTPS.
+ * Some mobile networks fail to resolve certain hosts (e.g. *.vercel.app) at the DNS level, and the
+ * phone's resolver can hang for many seconds before giving up. So: ask the phone's DNS, but if it
+ * hasn't answered within 1.5 s (or fails), use Cloudflare / Google DNS-over-HTTPS. Hosts that needed
+ * the fallback are remembered, so later lookups and launches go straight to DNS-over-HTTPS.
  */
 object ResilientDns : okhttp3.Dns {
-    private val bootstrap = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
+    private val bootstrap = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(6, TimeUnit.SECONDS).build()
+    private val pool = java.util.concurrent.Executors.newCachedThreadPool { r -> Thread(r, "dns").apply { isDaemon = true } }
 
     private val cloudflare by lazy {
         okhttp3.dnsoverhttps.DnsOverHttps.Builder().client(bootstrap)
@@ -118,10 +121,7 @@ object ResilientDns : okhttp3.Dns {
     }
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<List<java.net.InetAddress>, Long>>()
 
-    override fun lookup(hostname: String): List<java.net.InetAddress> {
-        cache[hostname]?.let { (addrs, at) -> if (System.currentTimeMillis() - at < 10 * 60_000) return addrs }
-        val system = runCatching { okhttp3.Dns.SYSTEM.lookup(hostname) }.getOrNull()
-        if (!system.isNullOrEmpty()) return system
+    private fun viaDoh(hostname: String): List<java.net.InetAddress>? {
         for (resolver in listOf(cloudflare, google)) {
             val addrs = runCatching { resolver.lookup(hostname) }.getOrNull()
             if (!addrs.isNullOrEmpty()) {
@@ -129,6 +129,24 @@ object ResilientDns : okhttp3.Dns {
                 return addrs
             }
         }
-        throw java.net.UnknownHostException("Couldn't find $hostname. Check your internet connection.")
+        return null
+    }
+
+    override fun lookup(hostname: String): List<java.net.InetAddress> {
+        cache[hostname]?.let { (addrs, at) -> if (System.currentTimeMillis() - at < 30 * 60_000) return addrs }
+        // this network is known to block the host: skip the slow system lookup
+        if (hostname in Store.dohHosts) viaDoh(hostname)?.let { return it }
+
+        val system = pool.submit<List<java.net.InetAddress>> { okhttp3.Dns.SYSTEM.lookup(hostname) }
+        val fast = runCatching { system.get(1500, TimeUnit.MILLISECONDS) }.getOrNull()
+        if (!fast.isNullOrEmpty()) return fast
+
+        viaDoh(hostname)?.let { addrs ->
+            Store.rememberDohHost(hostname)
+            return addrs
+        }
+        // DoH failed too (offline?): give the system lookup a little longer
+        runCatching { system.get(4, TimeUnit.SECONDS) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+        throw java.net.UnknownHostException("Couldn't reach $hostname. Check your internet connection.")
     }
 }

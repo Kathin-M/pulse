@@ -138,8 +138,34 @@ def assetlinks():
 
 
 # ------------------------------------------------------------------ feed
+def _kick_ingest_if_stale(db) -> None:
+    """GitHub's cron isn't reliable for this repo, so app traffic keeps the news fresh: if the last
+    ingest is older than 45 min, start the ingest workflow (at most once every 20 min)."""
+    token = os.environ.get("GH_DISPATCH_TOKEN")
+    repo = os.environ.get("GH_DISPATCH_REPO")
+    if not token or not repo:
+        return
+    try:
+        last = (D.get_setting(db, "last_ingest") or {}).get("at")
+        if last and D.now() - datetime.fromisoformat(last) < timedelta(minutes=45):
+            return
+        kicked = D.get_setting(db, "last_kick")
+        if kicked and D.now() - datetime.fromisoformat(kicked) < timedelta(minutes=20):
+            return
+        D.set_setting(db, "last_kick", D.now().isoformat())
+        import httpx
+        httpx.post(
+            f"https://api.github.com/repos/{repo}/actions/workflows/ingest.yml/dispatches",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            json={"ref": "main"}, timeout=3,
+        )
+    except Exception:
+        pass
+
+
 @app.get("/api/feed")
 def feed(mode: str = "foryou", exclude: str = "", limit: int = 60, uid: int = Depends(current_user), db=Depends(get_db)):
+    _kick_ingest_if_stale(db)
     ex = {int(x) for x in exclude.split(",") if x.strip().lstrip("-").isdigit()}
     out = ranker.rank(db, uid, mode=mode, limit=min(limit, 100), exclude=ex)
     out["onboarded"] = D.get_prefs(db, uid).get("onboarded", False)
