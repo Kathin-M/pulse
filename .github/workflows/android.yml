@@ -38,6 +38,8 @@ jobs:
           envsubst < android/twa-manifest.template.json > build-android/twa-manifest.json
           printf '%s' "$KEYSTORE_B64" | base64 -d > build-android/android.keystore
           printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
+          # Bubblewrap validates the SDK by looking for the legacy tools/ folder.
+          [ -e "$ANDROID_HOME/tools" ] || sudo ln -s "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/tools"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           npm install -g @bubblewrap/cli@1
       - name: Build APK
