@@ -53,6 +53,9 @@ data class FeedResponse(
     val mode: String = "foryou",
     val onboarded: Boolean = true,
     @SerialName("last_ingest") val lastIngest: Ingest? = null,
+    val edition: String? = null,                                   // Top: "Morning edition" / "Evening edition"
+    @SerialName("next_edition_at") val nextEditionAt: String? = null,
+    @SerialName("edition_size") val editionSize: Int = 0,
 )
 
 @Serializable

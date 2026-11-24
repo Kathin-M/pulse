@@ -352,3 +352,105 @@ def rank(db, uid: int, mode: str = "foryou", limit: int = 60, exclude: set[int] 
 
     cards = [s["card"] for s in ordered[:limit]]
     return {"cards": cards, "total": len(cards), "mode": mode}
+
+
+# ---------------------------------------------------------------- Top: the day's biggest stories
+# A short, shared briefing: the stories most widely covered, weighted towards major outlets.
+# Two editions a day (06:00 and 18:00 India time); each edition's list stays fixed until the next.
+MAJOR_OUTLETS = (
+    "the hindu", "indian express", "the indian express", "the new indian express", "ndtv", "hindustan times",
+    "times of india", "the times of india", "mint", "livemint", "bbc", "reuters", "india today",
+    "the economic times", "economic times", "moneycontrol", "business standard", "deccan herald", "news18",
+    "the print", "theprint", "scroll", "the guardian", "bloomberg", "associated press", "ap news", "cnn",
+    "al jazeera", "wion", "firstpost", "the wire", "financial express", "the quint",
+)
+TOP_SIZE = 10
+IST = timedelta(hours=5, minutes=30)
+
+
+def edition_window(now):
+    local = now + IST
+    day = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    if local.hour >= 18:
+        start, name, nxt, tag = day + timedelta(hours=18), "Evening edition", day + timedelta(days=1, hours=6), "pm"
+    elif local.hour >= 6:
+        start, name, nxt, tag = day + timedelta(hours=6), "Morning edition", day + timedelta(hours=18), "am"
+    else:
+        start, name, nxt, tag = day - timedelta(hours=6), "Evening edition", day + timedelta(hours=6), "pm"
+    return {"id": f"{start.date().isoformat()}-{tag}", "name": name, "start": start - IST, "next": nxt - IST}
+
+
+def _is_major(publisher: str) -> bool:
+    p = (publisher or "").lower()
+    return any(p == m or p.startswith(m + " ") or p.startswith(m + " ·") for m in MAJOR_OUTLETS)
+
+
+def _compute_top(db, now) -> list[int]:
+    since = now - timedelta(hours=24)
+    stories = list(db.stories.find({"first_seen": {"$gte": since - timedelta(hours=12)}, "last_updated": {"$gte": since},
+                                    "source_count": {"$gte": 3}}, {"centroid": 0}))
+    if len(stories) < TOP_SIZE:   # quiet day: relax the bar
+        stories = list(db.stories.find({"last_updated": {"$gte": since}, "source_count": {"$gte": 2}}, {"centroid": 0}))
+    pubs: dict[int, set] = {}
+    for a in db.articles.find({"story_id": {"$in": [s["_id"] for s in stories]}, "kind": {"$in": ["report", "video"]}},
+                              {"story_id": 1, "publisher": 1}):
+        pubs.setdefault(a["story_id"], set()).add(a["publisher"])
+    scored = []
+    for s in stories:
+        outlets = pubs.get(s["_id"], set())
+        majors = sum(1 for p in outlets if _is_major(p))
+        age_h = (now - D.aware(s["first_seen"])).total_seconds() / 3600
+        score = 2.0 * math.log1p(len(outlets)) + 0.7 * majors + 1.2 * 0.5 ** (max(age_h, 0) / 18)
+        scored.append((score, s))
+    scored.sort(key=lambda x: -x[0])
+    picked, per_topic, threads = [], Counter(), set()
+    for _, s in scored:
+        topic = (s.get("topics") or ["Other"])[0]
+        if per_topic[topic] >= 2 or (s.get("thread_id") and s["thread_id"] in threads):
+            continue
+        picked.append(s["_id"])
+        per_topic[topic] += 1
+        if s.get("thread_id"):
+            threads.add(s["thread_id"])
+        if len(picked) >= TOP_SIZE:
+            break
+    return picked
+
+
+def top_edition(db, uid: int) -> dict:
+    now = D.now()
+    ed = edition_window(now)
+    key = f"top:{ed['id']}"
+    ids = D.get_setting(db, key)
+    if ids is None:
+        ids = _compute_top(db, now)
+        D.set_setting(db, key, ids)
+        db.settings.delete_many({"_id": {"$regex": "^top:", "$ne": key}})
+    rules = _rules(db, uid)
+    sources = user_sources(db, uid)
+    muted_publishers = {r["label"] for r in rules["mute"] if r["kind"] == "source"}
+    stories = {s["_id"]: s for s in db.stories.find({"_id": {"$in": ids}})}
+    states = {s["story_id"]: s for s in db.state.find({"uid": uid, "story_id": {"$in": ids}})}
+    arts: dict[int, list] = {}
+    for a in db.articles.find({"story_id": {"$in": ids}}, {"embedding": 0, "body": 0}):
+        arts.setdefault(a["story_id"], []).append(a)
+    cards, seen_count = [], 0
+    for rank_i, sid in enumerate(ids, start=1):
+        s, st = stories.get(sid), states.get(sid) or {}
+        if not s or not arts.get(sid):
+            continue
+        if st.get("seen_at") and D.aware(st["seen_at"]) >= ed["start"] and st.get("status") in ("seen", "liked", "fine", "hidden"):
+            seen_count += 1
+            continue
+        card = build_card(s, arts[sid], sources, muted_publishers, st)
+        if not card:
+            continue
+        text = " ".join([card["title"], card["summary"] or "", " ".join(s.get("entities") or [])])
+        publishers = {a["publisher"] for a in arts[sid]}
+        if any(_matches(r, text, s.get("topics") or [], s.get("places") or [], publishers) for r in rules["mute"] if r["kind"] != "source"):
+            continue
+        card["badge"] = f"Top {rank_i}"
+        card["why"] = f"#{rank_i} today · covered by {card['source_count']} outlets"
+        cards.append(card)
+    return {"cards": cards, "total": len(cards), "mode": "top", "edition": ed["name"],
+            "next_edition_at": ed["next"].isoformat(), "edition_size": len(ids), "edition_seen": seen_count}

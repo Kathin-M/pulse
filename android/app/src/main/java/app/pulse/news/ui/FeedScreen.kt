@@ -139,6 +139,30 @@ private fun CaughtUp(since: OffsetDateTime, empty: Boolean, mode: String, ingest
     }
 }
 
+/** End of the Top briefing: what it was and when the next edition lands. */
+@Composable
+private fun TopDone(ed: FeedResponse, onSeen: () -> Unit) {
+    val c = LocalColors.current
+    val next = parseTime(ed.nextEditionAt)?.atZoneSameInstant(java.time.ZoneId.systemDefault())
+    val nextText = next?.let {
+        val day = if (it.toLocalDate() == java.time.LocalDate.now()) "" else " tomorrow"
+        it.format(DateTimeFormatter.ofPattern("h a")).lowercase() + day
+    } ?: "soon"
+    Column(
+        Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(c.surface).padding(28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+    ) {
+        Box(Modifier.width(56.dp).height(2.dp).background(c.accent))
+        Text("That's the ${ed.edition ?: "edition"}", style = Type.headlineXl, color = c.text)
+        Text(
+            if (ed.editionSize > 0) "You've seen today's ${ed.editionSize} biggest stories. The next edition arrives at $nextText."
+            else "Not enough big stories yet. The next edition arrives at $nextText.",
+            style = Type.summary, color = c.text2,
+        )
+        Pill("Open Seen", onClick = onSeen)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoreSheet(card: Card, onDismiss: () -> Unit, onNotInterested: () -> Unit, onSources: () -> Unit, onMute: (String) -> Unit) {
@@ -197,6 +221,7 @@ fun FeedScreen(
     var dragging by remember { mutableStateOf(false) }
     var chip by remember { mutableStateOf<ChipRef?>(null) }
     var ingest by remember { mutableStateOf<Ingest?>(null) }
+    var edition by remember { mutableStateOf<FeedResponse?>(null) }   // Top: edition name + next edition time
     val sessionStart = remember { OffsetDateTime.now() }
     val swiped = remember { mutableSetOf<Int>() }
     var sinceRefresh by remember { mutableIntStateOf(0) }
@@ -208,6 +233,7 @@ fun FeedScreen(
             if (mode == "foryou") Store.cachedFeed = text
             offline = false; error = null
             ingest = r.lastIngest
+            edition = if (mode == "top") r else null
             if (!r.onboarded) onNeedsOnboarding()
             val fresh = r.cards.filter { it.id !in swiped && keep.none { k -> k.id == it.id } }
             queue.clear(); queue.addAll(keep + fresh)
@@ -270,7 +296,7 @@ fun FeedScreen(
     val total = done + queue.size
     val progress by animateFloatAsState(if (total > 0) done / total.toFloat() else 0f, tween(250), label = "progress")
 
-    val modes = listOf("foryou" to "For you", "local" to "Local", "following" to "Following")
+    val modes = listOf("top" to "Top", "foryou" to "For you", "local" to "Local", "following" to "Following")
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val feedBackdrop = rememberLayerBackdrop()
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -319,7 +345,9 @@ fun FeedScreen(
                     },
                     empty = {
                         Box(Modifier.fillMaxSize().padding(top = topInset + 76.dp, bottom = bottomInset + 90.dp, start = 12.dp, end = 12.dp)) {
-                            CaughtUp(sessionStart, done == 0, mode, ingest, offline && queue.isEmpty(), onGoSeen) { load() }
+                            val ed = edition
+                            if (mode == "top" && ed != null) TopDone(ed, onGoSeen)
+                            else CaughtUp(sessionStart, done == 0, mode, ingest, offline && queue.isEmpty(), onGoSeen) { load() }
                         }
                     },
                 )

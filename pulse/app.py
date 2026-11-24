@@ -167,7 +167,10 @@ def _kick_ingest_if_stale(db) -> None:
 def feed(mode: str = "foryou", exclude: str = "", limit: int = 60, uid: int = Depends(current_user), db=Depends(get_db)):
     _kick_ingest_if_stale(db)
     ex = {int(x) for x in exclude.split(",") if x.strip().lstrip("-").isdigit()}
-    out = ranker.rank(db, uid, mode=mode, limit=min(limit, 100), exclude=ex)
+    if mode == "top":
+        out = ranker.top_edition(db, uid)
+    else:
+        out = ranker.rank(db, uid, mode=mode, limit=min(limit, 100), exclude=ex)
     out["onboarded"] = D.get_prefs(db, uid).get("onboarded", False)
     out["last_ingest"] = D.get_setting(db, "last_ingest")
     return out
