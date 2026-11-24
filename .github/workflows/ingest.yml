@@ -1,0 +1,40 @@
+name: Ingest news
+
+# Pulls every feed, clusters stories and writes them to MongoDB.
+# Runs only in the repository where the repo variable PULSE_DEPLOY is "true",
+# so forks and mirrors never run it (and never need secrets).
+on:
+  schedule:
+    - cron: "30 0-17 * * *"   # hourly, 06:00–23:00 IST
+    - cron: "30 20,23 * * *"  # 02:00 and 05:00 IST
+  workflow_dispatch:
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    if: vars.PULSE_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: worker/requirements.txt
+      - run: pip install -r worker/requirements.txt
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: .cache/fastembed
+          key: fastembed-paraphrase-multilingual-MiniLM-L12-v2
+      - name: Ingest
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DB: ${{ vars.MONGODB_DB || 'pulse' }}
+          FASTEMBED_CACHE: .cache/fastembed
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+        run: python -m worker.ingest

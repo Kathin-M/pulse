@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+.vercel
+# python
+.venv/
+__pycache__/
+*.pyc
+.cache/
+# web
+web/node_modules/
+web/dist/
+web/dev-dist/
+# misc
+.DS_Store

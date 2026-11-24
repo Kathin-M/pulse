@@ -1,0 +1,31 @@
+name: Publish to public repo
+
+# Keeps the open-source copy in sync: every push to main here is scanned for
+# secrets, and only a clean history is pushed to the public repository.
+# Needs: repo variable PUBLIC_REPO (owner/name) and secret PUBLIC_DEPLOY_KEY
+# (private half of a write-enabled deploy key on the public repo).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    if: vars.PUBLIC_REPO != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --exit-code 1 .
+      - name: Push to public repo
+        env:
+          KEY: ${{ secrets.PUBLIC_DEPLOY_KEY }}
+          REPO: ${{ vars.PUBLIC_REPO }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/public_key && chmod 600 ~/.ssh/public_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/public_key" git push --force "git@github.com:${REPO}.git" HEAD:main

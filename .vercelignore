@@ -1,0 +1,6 @@
+.venv
+.cache
+web/node_modules
+web/dist
+worker
+.env

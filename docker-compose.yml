@@ -1,0 +1,29 @@
+# Self-host Pulse on any machine with Docker: `cp .env.example .env`, edit, `docker compose up -d`.
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes: [mongo:/data/db]
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+    ports: ["8000:8000"]
+    depends_on: [mongo]
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+    command: ["sh", "-c", "while true; do python -m worker.ingest; sleep ${INGEST_INTERVAL:-1800}; done"]
+    volumes: [models:/data]
+    depends_on: [mongo]
+
+volumes:
+  mongo:
+  models:

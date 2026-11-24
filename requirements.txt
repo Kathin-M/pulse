@@ -1,0 +1,7 @@
+# API (Vercel serverless function). The ingest worker has its own worker/requirements.txt.
+fastapi>=0.115
+pymongo[srv]>=4.10
+numpy>=2.0
+itsdangerous>=2.2
+httpx>=0.27
+trafilatura>=2.0

@@ -1,0 +1,9 @@
+# Ingest worker (GitHub Actions / docker). Not installed on Vercel.
+pymongo[srv]>=4.10
+numpy>=2.0
+httpx>=0.27
+feedparser>=6.0
+trafilatura>=2.0
+fastembed>=0.5
+pillow>=11
+googlenewsdecoder>=0.1.7
