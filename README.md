@@ -16,6 +16,18 @@ A private, self-hosted news app that shows **one story at a time**, learns from 
 | Double-tap | Save for later, no ranking change |
 | Undo / `u` | Take back any of the last five swipes |
 
+## Android app
+
+`android/` is a native Android app (Kotlin + Jetpack Compose), not a web wrapper: native swipe stack with haptics,
+story detail, reader view, Seen, Liked, Controls and Insights, an offline copy of your last feed, an optional
+daily "Morning brief" notification, and in-app updates.
+
+- Download `Pulse.apk` from this repo's [Releases](../../releases), install it, and log in with your server address and password.
+- Each push that touches `android/` builds a signed APK (`.github/workflows/android.yml`) and publishes a release
+  tagged `android-<versionCode>`. Installed apps see it and offer **Update** without leaving the app.
+- To publish your own builds: set repo variable `ANDROID_RELEASE=true` and `ANDROID_PACKAGE`, and secrets
+  `ANDROID_KEYSTORE_B64` / `ANDROID_KEYSTORE_PASSWORD` (a keystore with alias `pulse`).
+
 ## How it works
 
 ```

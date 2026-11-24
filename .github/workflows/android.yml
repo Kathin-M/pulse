@@ -1,9 +1,10 @@
-name: Android APK
+name: Android app
 
-# Builds a signed APK: a full-screen WebView on the deployed site. It loads the live
-# app, so web deploys update it; rebuild only when files under android/ change.
-# Output: the "android" GitHub release (Pulse.apk).
-# Needs: vars PULSE_HOST, ANDROID_PACKAGE; secrets ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD.
+# Builds the native Android app (Kotlin + Jetpack Compose) and publishes it as a GitHub
+# release tagged android-<versionCode> with Pulse.apk attached. Installed apps check the
+# latest release and offer the update in-app.
+# Runs only where repo variable ANDROID_RELEASE is "true" (the public repo), with secrets
+# ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_PASSWORD and variable ANDROID_PACKAGE.
 on:
   workflow_dispatch:
   push:
@@ -15,9 +16,9 @@ permissions:
 
 jobs:
   apk:
-    if: vars.PULSE_HOST != '' && vars.ANDROID_PACKAGE != ''
+    if: vars.ANDROID_RELEASE == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -30,12 +31,13 @@ jobs:
       - name: Build signed APK
         working-directory: android
         env:
-          PULSE_HOST: ${{ vars.PULSE_HOST }}
           ANDROID_PACKAGE: ${{ vars.ANDROID_PACKAGE }}
-          VERSION_CODE: ${{ github.run_number }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PULSE_DEFAULT_SERVER: ${{ vars.PULSE_DEFAULT_SERVER }}
         run: |
+          export VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           export KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
@@ -45,6 +47,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view android >/dev/null 2>&1 || gh release create android --title "Pulse for Android" --notes "Install Pulse.apk on your phone."
-          gh release edit android --notes "Install Pulse.apk on your phone. It opens the live app, so it updates itself with every deploy. Build ${{ github.run_number }}."
-          gh release upload android Pulse.apk --clobber
+          gh release create "android-$VERSION_CODE" Pulse.apk --latest \
+            --title "Pulse for Android 2.$VERSION_CODE" \
+            --notes "Native Android app. Install Pulse.apk, log in with your server address and password. Installed apps offer this update automatically."

@@ -78,6 +78,8 @@ def build_card(story: dict, arts: list[dict], sources: dict, muted_publishers: s
     elif imgs:
         best_img = max(imgs, key=lambda a: a["image_w"])
     summary = lead.get("summary") or next((a["summary"] for a in reports if a.get("summary")), "")
+    if summary and summary.lower().startswith(lead["title"].lower()[:60]):
+        summary = summary[len(lead["title"]):].lstrip(" .:-–|")  # don't repeat the headline
     publishers = sorted({a["publisher"] for a in reports})
     state = state or {}
     return {

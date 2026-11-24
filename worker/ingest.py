@@ -633,8 +633,12 @@ def build_threads(db) -> None:
     for members in groups.values():
         if len(members) < 3 or len(members) > 15:
             continue
-        names = Counter(e for i in members for e in (stories[i].get("entities") or [])[:6]
-                        if T.key_tokens([e]) & set().union(*(keyn[k] for k in members)))
+        shared_keys = set().union(*(keyn[k] for k in members))
+        names = Counter()
+        for i in members:
+            for e in (stories[i].get("entities") or [])[:6]:
+                if T.key_tokens([e]) & shared_keys:
+                    names[e] += 2 if " " in e else 1   # prefer full names ("Sheikh Hasina") over single words
         title = names.most_common(1)[0][0] if names else (stories[members[0]]["topics"] or ["Developing story"])[0]
         existing = Counter(stories[i].get("thread_id") for i in members if stories[i].get("thread_id"))
         if existing:

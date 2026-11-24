@@ -1,38 +1,50 @@
-plugins { id "com.android.application" }
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "org.jetbrains.kotlin.plugin.compose"
+    id "org.jetbrains.kotlin.plugin.serialization"
+}
 
-// All deployment-specific values come from the environment (set by CI), so the
-// open-source repo carries no personal URLs or package names.
+// Deployment-specific values come from the environment (set by CI), so the
+// open-source code carries no personal URLs.
 def env = { String k, String d -> System.getenv(k) ?: d }
-def host = env("PULSE_HOST", "localhost")
+def keystorePath = System.getenv("KEYSTORE_PATH")
 
 android {
     namespace "app.pulse.news"
     compileSdk 35
 
     defaultConfig {
-        applicationId env("ANDROID_PACKAGE", "app.pulse.news")
-        minSdk 24
+        applicationId env("ANDROID_PACKAGE", "io.github.kathinm.pulse")
+        minSdk 26
         targetSdk 35
-        versionCode Integer.parseInt(env("VERSION_CODE", "1"))
-        versionName "1." + env("VERSION_CODE", "1")
-        buildConfigField "String", "PULSE_HOST", "\"${host}\""
+        versionCode Integer.parseInt(env("VERSION_CODE", "100"))
+        versionName "2." + env("VERSION_CODE", "100")
+        // Server the login screen suggests (optional), and the GitHub repo whose releases carry updates.
+        buildConfigField "String", "DEFAULT_SERVER", "\"${env("PULSE_DEFAULT_SERVER", "")}\""
+        buildConfigField "String", "UPDATE_REPO", "\"${env("GITHUB_REPOSITORY", "")}\""
     }
 
-    buildFeatures { buildConfig true }
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
 
-    signingConfigs {
-        release {
-            storeFile file(env("KEYSTORE_PATH", "release.keystore"))
-            storePassword env("KEYSTORE_PASSWORD", "")
-            keyAlias env("KEY_ALIAS", "pulse")
-            keyPassword env("KEYSTORE_PASSWORD", "")
+    if (keystorePath) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias env("KEY_ALIAS", "pulse")
+                keyPassword System.getenv("KEYSTORE_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            if (keystorePath) signingConfig signingConfigs.release
         }
     }
 
@@ -40,4 +52,21 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    implementation platform("androidx.compose:compose-bom:2024.12.01")
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.activity:activity-compose:1.9.3"
+    implementation "androidx.core:core-ktx:1.15.0"
+    implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.7"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+    implementation "io.coil-kt:coil-compose:2.7.0"
+    implementation "androidx.browser:browser:1.8.0"
+    implementation "androidx.work:work-runtime-ktx:2.10.0"
 }
