@@ -100,6 +100,9 @@ fun rimBrush(strength: Float = GlassTokens.rimStrength()): Brush = Brush.linearG
  */
 val LocalBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 
+/** True where glass sits over photos (the feed): darker glass and white labels so text always reads. */
+val LocalGlassOnPhoto = staticCompositionLocalOf { false }
+
 /**
  * Glass material. With a backdrop (Android 12+) it is real liquid glass via the backdrop library:
  * "full" = lens refraction + light frost + specular highlight, "light" = frosted blur only.
@@ -108,13 +111,15 @@ val LocalBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 fun Modifier.glass(shape: Shape, tint: Color, rim: Brush, elevation: Dp = 10.dp, indicator: Boolean = false): Modifier = composed {
     val c = LocalColors.current
     val backdrop = LocalBackdrop.current
+    val onPhoto = LocalGlassOnPhoto.current
     val mode = app.pulse.news.data.Store.glass
     if (backdrop != null && mode != "off" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val surface = when {
-            indicator && c.dark -> Color.White.copy(alpha = 0.12f)
-            indicator -> Color.White.copy(alpha = 0.5f)
-            c.dark -> Color.Black.copy(alpha = 0.16f)
-            else -> Color.White.copy(alpha = 0.28f)
+            indicator && (onPhoto || c.dark) -> Color.White.copy(alpha = 0.16f)
+            indicator -> Color.White.copy(alpha = 0.6f)
+            onPhoto -> Color.Black.copy(alpha = 0.38f)   // keeps white labels readable on bright photos
+            c.dark -> Color.Black.copy(alpha = 0.3f)
+            else -> Color.White.copy(alpha = 0.55f)
         }
         this.drawBackdrop(
             backdrop = backdrop,
@@ -122,14 +127,13 @@ fun Modifier.glass(shape: Shape, tint: Color, rim: Brush, elevation: Dp = 10.dp,
             effects = {
                 vibrancy()
                 if (mode == "full") {
-                    blur(3f.dp.toPx())
+                    blur(6f.dp.toPx())
                     lens(
                         (if (indicator) 10f else 16f).dp.toPx(),
-                        (if (indicator) 18f else 32f).dp.toPx(),
-                        chromaticAberration = !indicator,
+                        (if (indicator) 18f else 30f).dp.toPx(),
                     )
                 } else {
-                    blur(16f.dp.toPx())
+                    blur(18f.dp.toPx())
                 }
             },
             onDrawSurface = { drawRect(surface) },
@@ -183,7 +187,7 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
                         contentAlignment = Alignment.Center,
                     ) {
                         // over a photo (refracting a backdrop) labels are white with a soft shadow, so they read on any image
-                        val onPhoto = LocalBackdrop.current != null && app.pulse.news.data.Store.glass != "off"
+                        val onPhoto = LocalGlassOnPhoto.current
                         Text(
                             label,
                             style = Type.meta.copy(
@@ -231,8 +235,17 @@ fun GlassTabBar(items: List<TabItem>, selected: Int, onSelect: (Int) -> Unit, mo
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Icon(item.icon, null, tint = if (on) c.accent else c.text2, modifier = Modifier.size(22.dp))
-                        Text(item.label, style = Type.chip.copy(fontWeight = FontWeight.SemiBold), color = if (on) c.accent else c.text2)
+                        val onPhoto = LocalGlassOnPhoto.current
+                        val idle = if (onPhoto) Color.White.copy(alpha = 0.88f) else c.text2
+                        Icon(item.icon, null, tint = if (on) c.accent else idle, modifier = Modifier.size(22.dp))
+                        Text(
+                            item.label,
+                            style = Type.chip.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                shadow = if (onPhoto) androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 6f) else null,
+                            ),
+                            color = if (on) c.accent else idle,
+                        )
                     }
                 }
             }
@@ -251,7 +264,7 @@ fun GlassIconButton(icon: ImageVector, contentDescription: String, enabled: Bool
         Modifier.size(size).scale(s).clickable(enabled = enabled, interactionSource = interaction, indication = null) { onClick() },
         shape = CircleShape,
     ) {
-        val onPhoto = LocalBackdrop.current != null && app.pulse.news.data.Store.glass != "off"
+        val onPhoto = LocalGlassOnPhoto.current
         Icon(icon, contentDescription, tint = when {
             !enabled -> (if (onPhoto) Color.White else c.text2).copy(alpha = 0.45f)
             onPhoto -> Color.White
@@ -319,5 +332,6 @@ object PulseIcons {
     val Heart = strokeIcon("heart", "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
     val Bookmark = strokeIcon("bookmark", "M6 3.5h12v17l-6-4-6 4z")
     val Send = strokeIcon("send", "M21 3 10 14", "m21 3-7 18-4-7-7-4z")
+    val More = strokeIcon("more", "M6.2 12a1.2 1.2 0 1 1-2.4 0a1.2 1.2 0 0 1 2.4 0", "M13.2 12a1.2 1.2 0 1 1-2.4 0a1.2 1.2 0 0 1 2.4 0", "M20.2 12a1.2 1.2 0 1 1-2.4 0a1.2 1.2 0 0 1 2.4 0")
     val Sources = strokeIcon("sources", "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z", "M8 9h8", "M8 13h8", "M8 17h5")
 }

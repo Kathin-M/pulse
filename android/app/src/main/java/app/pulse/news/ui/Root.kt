@@ -109,18 +109,8 @@ fun LoginScreen(onDone: () -> Unit) {
         }
     }
 
-    val loginBackdrop = rememberLayerBackdrop()
-    Box(Modifier.fillMaxSize()) {
-        // colourful backdrop for the glass card to refract
-        Box(Modifier.fillMaxSize().layerBackdrop(loginBackdrop).background(c.bg)) {
-            Box(Modifier.size(320.dp).offset(x = (-60).dp, y = 120.dp).background(
-                androidx.compose.ui.graphics.Brush.radialGradient(listOf(c.accent, c.accent.copy(alpha = 0f))), androidx.compose.foundation.shape.CircleShape))
-            Box(Modifier.size(280.dp).align(Alignment.CenterEnd).offset(x = 80.dp, y = 40.dp).background(
-                androidx.compose.ui.graphics.Brush.radialGradient(listOf(c.more.copy(alpha = 0.8f), c.more.copy(alpha = 0f))), androidx.compose.foundation.shape.CircleShape))
-            Box(Modifier.size(260.dp).align(Alignment.BottomStart).offset(x = 40.dp, y = (-90).dp).background(
-                androidx.compose.ui.graphics.Brush.radialGradient(listOf(androidx.compose.ui.graphics.Color(0xFF5B8CFF), androidx.compose.ui.graphics.Color(0x005B8CFF))), androidx.compose.foundation.shape.CircleShape))
-        }
-        androidx.compose.runtime.CompositionLocalProvider(LocalBackdrop provides loginBackdrop) {
+    Box(Modifier.fillMaxSize().background(c.bg)) {
+        run {
         // scrolls instead of squashing the card when the keyboard opens
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
         Column(
@@ -267,7 +257,7 @@ fun MainScreen(onLogout: () -> Unit) {
             }
         }
         // floating liquid-glass tab bar, within thumb reach; fades while you swipe
-        androidx.compose.runtime.CompositionLocalProvider(LocalBackdrop provides mainBackdrop) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalBackdrop provides mainBackdrop, LocalGlassOnPhoto provides (tab == Tab.Feed)) {
             GlassTabBar(
                 items = listOf(
                     TabItem("Feed", PulseIcons.Feed), TabItem("Seen", PulseIcons.Seen),

@@ -51,7 +51,7 @@ class SwipeController {
 }
 
 /**
- * The draggable top card. Right = more like this, left = seen, up = fine, down = less like this.
+ * The draggable top card. Right = more like this, left = seen, up = fine (next), down = back to the previous story.
  * It follows the finger, tilts up to 8°, shows the decision label as you drag, and commits
  * past ~35% of the width (or on a fast flick); otherwise it springs back.
  */
@@ -67,6 +67,7 @@ fun SwipeCard(
     onChip: (ChipRef) -> Unit,
     onWhy: () -> Unit,
     onAction: ((String) -> Unit)? = null,
+    canGoBack: Boolean = false,
 ) {
     val c = LocalColors.current
     val view = LocalView.current
@@ -90,6 +91,12 @@ fun SwipeCard(
 
         fun fly(dir: String) {
             if (committed) return
+            if (dir == "down") {
+                // down = back to the previous story: this card stays, the previous one slides in from the top
+                springBack()
+                if (canGoBack) { haptic(view); onSwiped("down", 0) }
+                return
+            }
             committed = true
             haptic(view, strong = true)
             val target = when (dir) {
@@ -132,7 +139,8 @@ fun SwipeCard(
                             when {
                                 horizontal && (ox > w * 0.35f || v.x > 1800f) -> fly("right")
                                 horizontal && (ox < -w * 0.35f || v.x < -1800f) -> fly("left")
-                                !horizontal && (oy > h * 0.22f || v.y > 2000f) -> fly("down")
+                                // a short pull down goes back, like Instagram
+                                !horizontal && (oy > h * 0.12f || v.y > 1200f) -> fly("down")
                                 !horizontal && (oy < -h * 0.22f || v.y < -2000f) -> fly("up")
                                 else -> springBack()
                             }
@@ -161,7 +169,7 @@ fun SwipeCard(
                 ActionRail(
                     card = card,
                     light = card.layout == "full" && card.image != null,
-                    onLike = { fly("right") },
+                    onMore = { onAction("more") },
                     onSave = { on -> onAction(if (on) "save" else "unsave") },
                     onShare = { onAction("share") },
                     onSources = { onAction("sources") },
@@ -172,7 +180,7 @@ fun SwipeCard(
             // decision labels fade in with drag distance
             Label("More like this", c.more, ((x - 20f) / 120f).coerceIn(0f, 1f), Modifier.align(Alignment.TopStart).padding(22.dp).rotate(-6f))
             Label("Seen", c.seen, ((-x - 20f) / 120f).coerceIn(0f, 1f), Modifier.align(Alignment.TopEnd).padding(22.dp).rotate(6f))
-            Label("Less like this", c.less, ((y - 20f) / 140f).coerceIn(0f, 1f), Modifier.align(Alignment.TopCenter).padding(22.dp))
+            if (canGoBack) Label("Back", c.seen, ((y - 20f) / 140f).coerceIn(0f, 1f), Modifier.align(Alignment.TopCenter).padding(top = 140.dp))
             Label("Fine", c.accent, ((-y - 20f) / 140f).coerceIn(0f, 1f), Modifier.align(Alignment.BottomCenter).padding(28.dp))
         }
     }

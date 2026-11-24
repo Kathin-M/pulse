@@ -53,7 +53,6 @@ import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
-private data class UndoEntry(val card: Card, val dir: String, val interactionId: Long)
 
 /**
  * A stack of cards: the top one draggable, the next one peeking behind at 96% so there's always
@@ -71,6 +70,7 @@ fun CardStack(
     onChip: (ChipRef) -> Unit = {},
     onWhy: () -> Unit = {},
     onAction: ((Card, String) -> Unit)? = null,
+    canGoBack: Boolean = false,
     empty: @Composable () -> Unit,
 ) {
     val top = cards.firstOrNull()
@@ -100,6 +100,7 @@ fun CardStack(
                     onChip = onChip,
                     onWhy = onWhy,
                     onAction = onAction?.let { f -> { a: String -> f(top, a) } },
+                    canGoBack = canGoBack,
                 )
             }
         }
@@ -135,6 +136,20 @@ private fun CaughtUp(since: OffsetDateTime, empty: Boolean, mode: String, ingest
             Pill("Check again", onClick = onRefresh)
         }
         ingest?.at?.let { Text("Last update ${ago(it)}", style = Type.chip, color = c.text2) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoreSheet(card: Card, onDismiss: () -> Unit, onNotInterested: () -> Unit, onSources: () -> Unit, onMute: (String) -> Unit) {
+    val c = LocalColors.current
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = c.raised) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(card.displayTitle, style = Type.meta, color = c.text2, maxLines = 2, modifier = Modifier.padding(bottom = 8.dp))
+            TextLink("Not interested", color = c.text, onClick = onNotInterested)
+            card.topics.firstOrNull()?.let { t -> TextLink("Mute $t", color = c.less) { onMute(t) } }
+            if (card.sourceCount > 1) TextLink("See all ${card.sourceCount} sources", color = c.text, onClick = onSources)
+        }
     }
 }
 
@@ -176,7 +191,8 @@ fun FeedScreen(
     var offline by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableIntStateOf(0) }
-    val undo = remember { mutableStateListOf<UndoEntry>() }
+    val history = remember { mutableStateListOf<Card>() }   // stories passed this session, for swipe-down = back
+    var menuCard by remember { mutableStateOf<Card?>(null) }
     var enterFrom by remember { mutableStateOf<String?>(null) }
     var dragging by remember { mutableStateOf(false) }
     var chip by remember { mutableStateOf<ChipRef?>(null) }
@@ -213,9 +229,20 @@ fun FeedScreen(
     LaunchedEffect(mode) { loaded = false; done = 0; queue.clear(); load() }
 
     fun onSwiped(card: Card, dir: String, dwell: Long) {
+        // swipe down = back to the story you just passed (like Instagram); nothing is recorded
+        if (dir == "down") {
+            val prev = history.removeLastOrNull() ?: return
+            swiped -= prev.id
+            enterFrom = "up"
+            queue.add(0, prev)
+            done = (done - 1).coerceAtLeast(0)
+            return
+        }
         enterFrom = null
         if (queue.firstOrNull()?.id == card.id) queue.removeAt(0)
         done++
+        history.add(card)
+        while (history.size > 30) history.removeAt(0)
         if (card.type == "thread" && dir == "right") {
             onOpenThread(card)
             scope.launch { runCatching { Api.interact(card.id, "right", dwell, storyIds = card.storyIds) } }
@@ -224,22 +251,20 @@ fun FeedScreen(
         swiped += card.id
         scope.launch {
             runCatching { Api.interact(card.id, dir, dwell, card.articleId, if (card.type == "thread") card.storyIds else null) }
-                .onSuccess { r ->
-                    undo.add(UndoEntry(card, dir, r.interactionId))
-                    while (undo.size > 5) undo.removeAt(0)
-                }
         }
         // re-rank every 10 swipes so the feed adapts within the session
         if (++sinceRefresh >= 10) { sinceRefresh = 0; load(queue.take(2)) }
     }
 
-    fun doUndo() {
-        val last = undo.removeLastOrNull() ?: return
-        scope.launch { runCatching { Api.undo(last.interactionId) } }
-        swiped -= last.card.id
-        enterFrom = last.dir
-        queue.add(0, last.card)
-        done = (done - 1).coerceAtLeast(0)
+    /** "Not interested" from the ⋯ menu: less of this, and move on. */
+    fun notInterested(card: Card) {
+        if (queue.firstOrNull()?.id == card.id) queue.removeAt(0)
+        done++
+        swiped += card.id
+        scope.launch {
+            runCatching { Api.interact(card.id, "down", null, card.articleId, if (card.type == "thread") card.storyIds else null) }
+        }
+        Toaster.show("Got it, fewer stories like this")
     }
 
     val total = done + queue.size
@@ -280,9 +305,11 @@ fun FeedScreen(
                     onDragging = { dragging = it; onDragging(it) },
                     onChip = { chip = it },
                     onWhy = onGoControls,
+                    canGoBack = history.isNotEmpty(),
                     onAction = { card, action ->
                         when (action) {
                             "share" -> shareStory(ctx, card, scope)
+                            "more" -> menuCard = card
                             "sources" -> onOpen(card.storyIdForDetail)
                             else -> if (card.id > 0) scope.launch {
                                 runCatching { Api.interact(card.id, action) }
@@ -302,17 +329,14 @@ fun FeedScreen(
         if (Store.hints && queue.isNotEmpty()) SwipeHints(dragging, Modifier.fillMaxSize().padding(top = topInset + 72.dp, bottom = bottomInset + 74.dp))
 
         // floating liquid-glass top bar over the story
-        CompositionLocalProvider(LocalBackdrop provides feedBackdrop) {
+        CompositionLocalProvider(LocalBackdrop provides feedBackdrop, LocalGlassOnPhoto provides true) {
             Column(Modifier.fillMaxWidth().padding(top = topInset).padding(horizontal = 12.dp, vertical = 6.dp).alpha(if (dragging) 0f else 1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassSegmented(
-                        options = modes.map { it.second },
-                        selected = modes.indexOfFirst { it.first == mode },
-                        onSelect = { mode = modes[it].first },
-                        modifier = Modifier.weight(1f),
-                    )
-                    GlassIconButton(PulseIcons.Undo, "Undo last swipe", enabled = undo.isNotEmpty()) { doUndo() }
-                }
+                GlassSegmented(
+                    options = modes.map { it.second },
+                    selected = modes.indexOfFirst { it.first == mode },
+                    onSelect = { mode = modes[it].first },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Row(Modifier.padding(top = 8.dp, start = 6.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f))) {
                         Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(50)).background(c.accent))
@@ -329,6 +353,19 @@ fun FeedScreen(
     }
 
     chip?.let { ChipSheet(it) { chip = null } }
+    menuCard?.let { card ->
+        MoreSheet(
+            card = card,
+            onDismiss = { menuCard = null },
+            onNotInterested = { notInterested(card); menuCard = null },
+            onSources = { onOpen(card.storyIdForDetail); menuCard = null },
+            onMute = { topic ->
+                scope.launch { runCatching { Api.addRule(topic, "topic", "mute") }.onSuccess { Toaster.show("Muted $topic") } }
+                notInterested(card)
+                menuCard = null
+            },
+        )
+    }
 }
 
 /** Swipe through the stories of one big event (a thread card). */

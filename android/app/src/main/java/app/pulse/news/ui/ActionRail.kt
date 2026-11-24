@@ -33,21 +33,20 @@ import androidx.compose.ui.unit.dp
 import app.pulse.news.data.Card
 
 /**
- * Reels-style action rail on the right of the top card: Like (= swipe right), Save, Share, Sources.
+ * Reels-style action rail on the right of the top card: Save, Share and ⋯ (not interested, mute, sources).
  * Buttons consume their own taps, so pressing one never opens the card or starts a swipe.
  */
 @Composable
-fun ActionRail(card: Card, light: Boolean, onLike: () -> Unit, onSave: (Boolean) -> Unit, onShare: () -> Unit, onSources: () -> Unit, modifier: Modifier = Modifier) {
+fun ActionRail(card: Card, light: Boolean, onMore: () -> Unit, onSave: (Boolean) -> Unit, onShare: () -> Unit, onSources: () -> Unit, modifier: Modifier = Modifier) {
     var saved by remember(card.id) { mutableStateOf(card.saved) }
     val c = LocalColors.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        RailButton(PulseIcons.Heart, "Like", light, onLike)
         RailButton(PulseIcons.Bookmark, if (saved) "Saved" else "Save", light, tint = if (saved) c.accent else null) {
             saved = !saved
             onSave(saved)
         }
         RailButton(PulseIcons.Send, "Share", light, onShare)
-        if (card.sourceCount > 1) RailButton(PulseIcons.Sources, "${card.sourceCount}", light, onSources)
+        RailButton(PulseIcons.More, "More", light, onMore)
     }
 }
 
@@ -88,8 +87,8 @@ fun SwipeHints(dragging: Boolean, modifier: Modifier = Modifier) {
     Box(modifier.padding(horizontal = 0.dp)) {
         // in the gaps between the glass bars and the story text
         Hint("↑ Fine", Modifier.align(Alignment.TopCenter), a)
-        Hint("↓ Less", Modifier.align(Alignment.BottomCenter), a)
-        Hint("‹ Seen", Modifier.align(Alignment.CenterStart).padding(start = 8.dp), a)
+        Hint("↓ Back", Modifier.align(Alignment.BottomCenter), a)
+        Hint("‹ Seen", Modifier.align(Alignment.TopStart).padding(top = 90.dp, start = 8.dp), a)
         Hint("More ›", Modifier.align(Alignment.TopEnd).padding(top = 90.dp, end = 8.dp), a)
     }
 }
