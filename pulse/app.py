@@ -94,6 +94,17 @@ def health():
     return {"ok": True}
 
 
+@app.get("/.well-known/assetlinks.json")
+def assetlinks():
+    """Digital Asset Links: lets the Android app (TWA) open this site full screen."""
+    pkg = os.environ.get("ANDROID_PACKAGE")
+    fps = [f.strip() for f in os.environ.get("ANDROID_CERT_SHA256", "").split(",") if f.strip()]
+    if not pkg or not fps:
+        return []
+    return [{"relation": ["delegate_permission/common.handle_all_urls"],
+             "target": {"namespace": "android_app", "package_name": pkg, "sha256_cert_fingerprints": fps}}]
+
+
 @app.get("/api/me")
 def me(request: Request):
     try:

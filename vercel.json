@@ -16,6 +16,10 @@
   },
   "rewrites": [
     {
+      "source": "/.well-known/assetlinks.json",
+      "destination": "/api/index"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index"
     },

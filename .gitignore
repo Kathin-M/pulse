@@ -16,3 +16,5 @@ web/dev-dist/
 # misc
 .DS_Store
 .env*
+*.keystore
+*.jks
