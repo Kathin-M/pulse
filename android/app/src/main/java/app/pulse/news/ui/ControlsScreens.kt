@@ -102,6 +102,9 @@ fun ControlsScreen(onInsights: () -> Unit, onOnboarding: () -> Unit, onLogout: (
     var briefHour by remember { mutableStateOf(Store.briefHour) }
     var update by remember { mutableStateOf<Updater.Release?>(null) }
     var checking by remember { mutableStateOf(false) }
+    var pwOpen by remember { mutableStateOf(false) }
+    var pwCur by remember { mutableStateOf("") }
+    var pwNew by remember { mutableStateOf("") }
 
     fun load() = scope.launch { runCatching { Api.get<Controls>("/api/controls") }.onSuccess { data = it }.onFailure { Toaster.show(it.message ?: "Offline") } }
     LaunchedEffect(Unit) { load() }
@@ -281,12 +284,38 @@ fun ControlsScreen(onInsights: () -> Unit, onOnboarding: () -> Unit, onLogout: (
         }
 
         item {
-            Section("App") {
-                Text("Pulse ${BuildConfig.VERSION_NAME}", style = Type.meta, color = c.text)
+            Section("Account") {
+                Text("Signed in as ${d.username ?: Store.username}", style = Type.meta, color = c.text)
                 Text(
                     d.lastIngest?.let { li -> li.at?.let { "News last fetched ${ago(it)} · ${li.new} new articles" } } ?: "Waiting for the first news fetch.",
                     style = Type.chip, color = c.text2, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),
                 )
+                if (pwOpen) {
+                    SearchField(pwCur, { pwCur = it }, "Current password", password = true)
+                    SearchField(pwNew, { pwNew = it }, "New password (6+ characters)", Modifier.padding(top = 8.dp), password = true)
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Save password", selected = true) {
+                            scope.launch {
+                                runCatching { Api.post<OkResponse>("/api/account/password", buildJsonObject { put("current", pwCur); put("new", pwNew) }) }
+                                    .onSuccess { pwOpen = false; pwCur = ""; pwNew = ""; Toaster.show("Password changed") }
+                                    .onFailure { Toaster.show(it.message ?: "Couldn't change password") }
+                            }
+                        }
+                        Pill("Cancel") { pwOpen = false }
+                    }
+                }
+                androidx.compose.foundation.layout.FlowRow(
+                    Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!pwOpen) Pill("Change password") { pwOpen = true }
+                    Pill("Redo setup", onClick = onOnboarding)
+                    Pill("Log out", onClick = onLogout)
+                }
+            }
+        }
+
+        item {
+            Section("App", "Pulse ${BuildConfig.VERSION_NAME}. Updates install from inside the app.") {
                 update?.let { rel ->
                     PrimaryButton("Install update ${rel.versionName}", Modifier.fillMaxWidth().padding(bottom = 10.dp)) { Updater.install(ctx, rel) }
                 }
@@ -300,10 +329,11 @@ fun ControlsScreen(onInsights: () -> Unit, onOnboarding: () -> Unit, onLogout: (
                             if (r == null) Toaster.show("You're on the latest version")
                         }
                     }
-                    Pill("Redo setup", onClick = onOnboarding)
-                    Pill("Log out", onClick = onLogout)
+                    if (Updater.enabled) Pill("Share Pulse") {
+                        shareText(ctx, "Pulse: news, one story at a time", "https://github.com/${BuildConfig.UPDATE_REPO}/releases/latest")
+                    }
                 }
-                Text("Server: ${Store.server}", style = Type.chip, color = c.text2, modifier = Modifier.padding(top = 12.dp))
+                if (Store.server != BuildConfig.DEFAULT_SERVER) Text("Server: ${Store.server}", style = Type.chip, color = c.text2, modifier = Modifier.padding(top = 12.dp))
             }
         }
     }

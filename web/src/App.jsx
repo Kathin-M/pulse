@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import { api, onAuthLost } from "./api.js";
 import Login from "./components/Login.jsx";
@@ -19,29 +19,41 @@ const TABS = [
   ["controls", "Controls"],
 ];
 
+function TabIcon({ name }) {
+  const common = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (name === "feed") return <svg {...common}><rect x="5" y="3.5" width="14" height="17" rx="3" /><path d="M8.5 8h7M8.5 12h7M8.5 16h4" /></svg>;
+  if (name === "seen") return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>;
+  if (name === "liked") return <svg {...common}><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>;
+  return <svg {...common}><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>;
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(null);
-  const [authError, setAuthError] = useState(null);
   const [tab, setTab] = useState("feed");
   const [detail, setDetail] = useState(null); // story id
   const [reader, setReader] = useState(null); // {articleId, storyId}
   const [onboarding, setOnboarding] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
   const [toast, setToast] = useState(null);
+  const tabbarRef = useRef(null);
+
+  // keep the glass droplet in sync when the tab changes from code (e.g. "Open Seen")
+  useEffect(() => {
+    const i = TABS.findIndex(([k]) => k === (tab === "insights" ? "controls" : tab));
+    tabbarRef.current?.lgSelect?.(i);
+  }, [tab]);
 
   const notify = useCallback((msg) => {
     setToast({ msg, key: Date.now() });
   }, []);
 
   useEffect(() => {
-    api.get("/api/me")
-      .then((r) => { setAuthed(r.authed); if (!r.authed && r.detail !== "login required") setAuthError(r.detail); })
-      .catch(() => setAuthed(false));
+    api.get("/api/me").then((r) => setAuthed(r.authed)).catch(() => setAuthed(false));
     return onAuthLost(() => setAuthed(false));
   }, []);
 
   if (authed === null) return <div className="h-full bg-bg" />;
-  if (!authed) return <Login error={authError} onDone={() => setAuthed(true)} />;
+  if (!authed) return <Login onDone={() => setAuthed(true)} />;
   if (onboarding) return <Onboarding onDone={() => { setOnboarding(false); setTab("feed"); }} />;
 
   return (
@@ -65,24 +77,20 @@ export default function App() {
         {tab === "insights" && <Insights onBack={() => setTab("controls")} notify={notify} />}
       </main>
 
-      <nav
-        className={`safe-bottom border-t border-divider bg-bg transition-opacity duration-200 ${chromeHidden ? "opacity-0" : "opacity-100"}`}
-      >
-        <div className="flex">
+      {/* floating liquid-glass tab bar, within thumb reach; fades while you swipe */}
+      <div className={`safe-bottom px-4 pb-2 pt-1 transition-opacity duration-200 ${chromeHidden ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
+        <nav ref={tabbarRef} className="lg-tabbar w-full" data-liquid-glass="regular">
           {TABS.map(([key, label]) => {
             const active = tab === key || (key === "controls" && tab === "insights");
             return (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`flex-1 py-3.5 t-meta ${active ? "text-ink" : "text-ink-2"}`}
-              >
-                <span className={`pb-1 ${active ? "border-b-2 border-accent" : ""}`}>{label}</span>
+              <button key={key} className="lg-tabbar__item" aria-current={active ? "page" : undefined} onClick={() => setTab(key)}>
+                <TabIcon name={key} />
+                <span>{label}</span>
               </button>
             );
           })}
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       <AnimatePresence>
         {detail != null && (

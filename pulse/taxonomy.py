@@ -298,3 +298,30 @@ _WORD_RE = re.compile(r"[a-z][a-z'’-]{3,}|\d[\d,.]*")
 
 def content_words(text: str) -> set[str]:
     return {w.strip("'’-") for w in _WORD_RE.findall(text.lower()) if w not in _STOP}
+
+
+def user_tier(story: dict, prefs: dict) -> str:
+    """Where a story sits for this user (city / state / india / world).
+
+    Places the story mentions decide first; which city/state feed it arrived through is only a
+    fallback for stories that name no Indian place (a state feed also carries national news).
+    """
+    city, state = prefs.get("city"), prefs.get("state")
+    places = story.get("places") or []
+    aliases = ({city} | set(CITIES.get(city, ("", [], None))[1])) if city else set()
+    if any(p in aliases for p in places):
+        return "city"
+    if any(p == state or (p in CITIES and CITIES[p][0] == state) for p in places):
+        return "state"
+    indian = [p for p in places if place_kind(p) in ("city", "state")]
+    foreign = [p for p in places if place_kind(p) == "country" and p != "India"]
+    if not indian:
+        if city in (story.get("src_cities") or []):
+            return "city"
+        if state in (story.get("src_states") or []):
+            return "state"
+    if foreign and not indian and "India" not in places:
+        return "world"
+    if indian or "India" in places:
+        return "india"
+    return story.get("tier_hint") or "india"

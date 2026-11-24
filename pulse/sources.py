@@ -43,7 +43,15 @@ def default_sources() -> list[dict]:
 
 
 def city_sources(city: str, state: str) -> list[dict]:
-    """Feeds for the user's chosen city and state."""
+    """Feeds for one city and its state (tagged so each user only gets their own)."""
+    out = _city_sources(city, state)
+    for s in out:
+        s["city"] = city if s.get("tier") == "city" else None
+        s["state"] = state
+    return out
+
+
+def _city_sources(city: str, state: str) -> list[dict]:
     out = [{
         "url": google_search_url(f'"{city}"'), "name": f"Google News · {city}", "kind": "city",
         "tier": "city", "query": f'"{city}"', "trust": 0.6,

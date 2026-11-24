@@ -50,7 +50,7 @@ class SwipeController {
 }
 
 /**
- * The draggable top card. Right = more like this, left = seen, down = less like this.
+ * The draggable top card. Right = more like this, left = seen, up = fine, down = less like this.
  * It follows the finger, tilts up to 8°, shows the decision label as you drag, and commits
  * past ~35% of the width (or on a fast flick); otherwise it springs back.
  */
@@ -74,6 +74,7 @@ fun SwipeCard(
         "right" -> Offset(2000f, 0f)
         "left" -> Offset(-2000f, 0f)
         "down" -> Offset(0f, 2600f)
+        "up" -> Offset(0f, -2600f)
         else -> Offset.Zero
     }
     val offset = remember { Animatable(start, Offset.VectorConverter) }
@@ -92,6 +93,7 @@ fun SwipeCard(
             val target = when (dir) {
                 "right" -> Offset(w * 1.5f, offset.value.y)
                 "left" -> Offset(-w * 1.5f, offset.value.y)
+                "up" -> Offset(offset.value.x, -h * 1.3f)
                 else -> Offset(offset.value.x, h * 1.3f)
             }
             scope.launch {
@@ -129,13 +131,14 @@ fun SwipeCard(
                                 horizontal && (ox > w * 0.35f || v.x > 1800f) -> fly("right")
                                 horizontal && (ox < -w * 0.35f || v.x < -1800f) -> fly("left")
                                 !horizontal && (oy > h * 0.22f || v.y > 2000f) -> fly("down")
+                                !horizontal && (oy < -h * 0.22f || v.y < -2000f) -> fly("up")
                                 else -> springBack()
                             }
                         },
                         onDrag = { change, amount ->
                             change.consume()
                             tracker.addPosition(change.uptimeMillis, change.position)
-                            scope.launch { offset.snapTo(Offset(offset.value.x + amount.x, (offset.value.y + amount.y).coerceAtLeast(-h * 0.15f))) }
+                            scope.launch { offset.snapTo(Offset(offset.value.x + amount.x, offset.value.y + amount.y)) }
                         },
                     )
                 }
@@ -157,6 +160,7 @@ fun SwipeCard(
             Label("More like this", c.more, ((x - 20f) / 120f).coerceIn(0f, 1f), Modifier.align(Alignment.TopStart).padding(22.dp).rotate(-6f))
             Label("Seen", c.seen, ((-x - 20f) / 120f).coerceIn(0f, 1f), Modifier.align(Alignment.TopEnd).padding(22.dp).rotate(6f))
             Label("Less like this", c.less, ((y - 20f) / 140f).coerceIn(0f, 1f), Modifier.align(Alignment.TopCenter).padding(22.dp))
+            Label("Fine", c.accent, ((-y - 20f) / 140f).coerceIn(0f, 1f), Modifier.align(Alignment.BottomCenter).padding(28.dp))
         }
     }
 }

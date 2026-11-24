@@ -235,23 +235,26 @@ fun FeedScreen(
     val total = done + queue.size
     val progress by animateFloatAsState(if (total > 0) done / total.toFloat() else 0f, tween(250), label = "progress")
 
+    val modes = listOf("foryou" to "For you", "local" to "Local", "following" to "Following")
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().height(3.dp).background(c.divider.copy(alpha = 0.6f))) {
-            Box(Modifier.fillMaxWidth(progress).height(3.dp).background(c.accent))
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).alpha(if (dragging) 0f else 1f),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            listOf("foryou" to "For you", "local" to "Local", "following" to "Following").forEach { (k, label) ->
-                Column(Modifier.padding(end = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    TextLink(label, color = if (mode == k) c.text else c.text2) { mode = k }
-                    Box(Modifier.width(28.dp).height(2.dp).background(if (mode == k) c.accent else androidx.compose.ui.graphics.Color.Transparent))
-                }
+        // top bar: glass segmented control + glass undo, with a thin progress line and counter
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).alpha(if (dragging) 0f else 1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassSegmented(
+                    options = modes.map { it.second },
+                    selected = modes.indexOfFirst { it.first == mode },
+                    onSelect = { mode = modes[it].first },
+                    modifier = Modifier.weight(1f),
+                )
+                GlassIconButton(PulseIcons.Undo, "Undo last swipe", enabled = undo.isNotEmpty()) { doUndo() }
             }
-            Spacer(Modifier.weight(1f))
-            if (total > 0) Text("${minOf(done + 1, total)} of $total", style = Type.chip, color = c.text2, modifier = Modifier.padding(end = 8.dp))
-            TextLink("↶ Undo", color = if (undo.isNotEmpty()) c.text else c.text2.copy(alpha = 0.4f)) { doUndo() }
+            Row(Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(50)).background(c.divider.copy(alpha = 0.7f))) {
+                    Box(Modifier.fillMaxWidth(progress).height(3.dp).clip(RoundedCornerShape(50)).background(c.accent))
+                }
+                if (total > 0) Text("${minOf(done + 1, total)} / $total", style = Type.chip, color = c.text2, modifier = Modifier.padding(start = 10.dp))
+            }
         }
         if (offline && queue.isNotEmpty()) {
             Text("Offline: showing your last feed", style = Type.chip, color = c.text2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp))
@@ -290,13 +293,15 @@ fun FeedScreen(
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(if (dragging || queue.isEmpty()) 0f else 1f),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextLink("← Seen") { controller.swipe("left") }
-            TextLink("↓ Less") { controller.swipe("down") }
-            TextLink("More →") { controller.swipe("right") }
+        // thumb-reach actions in a glass toolbar (also what the gestures do)
+        GlassToolbar(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).alpha(if (dragging || queue.isEmpty()) 0f else 1f)) {
+            ToolbarButton("← Seen") { controller.swipe("left") }
+            ToolbarButton("↓ Less") { controller.swipe("down") }
+            GlassDivider()
+            ToolbarButton("Share", icon = PulseIcons.Share) { queue.firstOrNull()?.let { shareStory(ctx, it, scope) } }
+            GlassDivider()
+            ToolbarButton("↑ Fine") { controller.swipe("up") }
+            ToolbarButton("More →", color = c.accent) { controller.swipe("right") }
         }
     }
 

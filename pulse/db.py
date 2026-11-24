@@ -38,6 +38,7 @@ def get_db():
 
 
 def ensure_indexes(db) -> None:
+    # shared news
     db.sources.create_index("url", unique=True)
     db.articles.create_index("url", unique=True)
     db.articles.create_index("story_id")
@@ -45,10 +46,15 @@ def ensure_indexes(db) -> None:
     db.articles.create_index("title_norm")
     db.stories.create_index([("last_updated", DESCENDING)])
     db.stories.create_index("thread_id")
-    db.state.create_index("status")
-    db.state.create_index([("seen_at", DESCENDING)])
-    db.interactions.create_index([("created_at", DESCENDING)])
-    db.rules.create_index([("kind", ASCENDING), ("label", ASCENDING)], unique=True)
+    # per-user data (everything personal carries a uid)
+    db.users.create_index("username", unique=True)
+    db.state.create_index([("uid", ASCENDING), ("story_id", ASCENDING)], unique=True)
+    db.state.create_index([("uid", ASCENDING), ("seen_at", DESCENDING)])
+    db.state.create_index("story_id")
+    db.interactions.create_index([("uid", ASCENDING), ("created_at", DESCENDING)])
+    db.rules.create_index([("uid", ASCENDING), ("kind", ASCENDING), ("label", ASCENDING)], unique=True)
+    db.clusters.create_index("uid")
+    db.user_sources.create_index([("uid", ASCENDING), ("source_id", ASCENDING)], unique=True)
 
 
 def next_id(db, name: str) -> int:
@@ -105,8 +111,16 @@ def set_setting(db, key, value) -> None:
     db.settings.update_one({"_id": key}, {"$set": {"value": value}}, upsert=True)
 
 
-def get_prefs(db) -> dict:
-    stored = get_setting(db, "prefs", {}) or {}
+def get_prefs(db, uid: int) -> dict:
+    stored = get_setting(db, f"prefs:{uid}", {}) or {}
     prefs = {**DEFAULT_PREFS, **stored}
     prefs["tiers"] = {**DEFAULT_PREFS["tiers"], **(stored.get("tiers") or {})}
     return prefs
+
+
+def set_prefs(db, uid: int, prefs: dict) -> None:
+    set_setting(db, f"prefs:{uid}", prefs)
+
+
+def state_id(uid: int, story_id: int) -> str:
+    return f"{uid}:{story_id}"

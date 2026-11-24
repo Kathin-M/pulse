@@ -13,15 +13,15 @@ import numpy as np
 
 from . import db as D
 from .profile import cluster_label, effective_weight, interest_score
-from .taxonomy import CITIES, EVERGREEN_TOPICS
+from .taxonomy import CITIES, EVERGREEN_TOPICS, user_tier
 
 WINDOW_H = 72
 MIN_SCORE = 0.20
 CARD_FIELDS = {"embedding": 0, "body": 0}
 
 
-def _rules(db):
-    rules = list(db.rules.find({}, {"embedding": 0}))
+def _rules(db, uid):
+    rules = list(db.rules.find({"uid": uid}, {"embedding": 0}))
     out = {"mute": [], "follow": [], "always": []}
     for r in rules:
         out.setdefault(r["mode"], []).append(r)
@@ -43,6 +43,24 @@ def _matches(rule: dict, text: str, topics: list[str], places: list[str], publis
     return re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text, re.I) is not None
 
 
+def _strip_headline(summary: str, title: str) -> str:
+    """Drop a leading copy of the headline from the summary (ignoring punctuation and case)."""
+    if not summary:
+        return summary
+    norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower())
+    nt = norm(title)
+    if len(nt) < 12 or not norm(summary).startswith(nt[:40]):
+        return summary
+    # walk the summary until we've consumed as many alphanumerics as the title has
+    count, i = 0, 0
+    while i < len(summary) and count < len(nt):
+        if summary[i].isalnum():
+            count += 1
+        i += 1
+    rest = summary[i:].lstrip(" .:-–—|,")
+    return rest if len(rest) > 20 else ""
+
+
 def _layout(w: int | None) -> str:
     if not w:
         return "text"
@@ -53,11 +71,26 @@ def _layout(w: int | None) -> str:
     return "text"
 
 
-def load_candidates(db, include_seen_updates=True):
+def user_sources(db, uid):
+    """Shared sources merged with this user's own trust / on-off / learned bias."""
+    out = {s["_id"]: s for s in db.sources.find({}, {"trust": 1, "name": 1, "enabled": 1, "kind": 1})}
+    for o in db.user_sources.find({"uid": uid}):
+        s = out.get(o["source_id"])
+        if s is None:
+            continue
+        if "trust" in o:
+            s["trust"] = o["trust"]
+        if "enabled" in o:
+            s["user_enabled"] = o["enabled"]
+        s["bias"] = o.get("bias", 0.0)
+    return out
+
+
+def load_candidates(db, uid, include_seen_updates=True):
     now = D.now()
     since = now - timedelta(hours=WINDOW_H)
     stories = {s["_id"]: s for s in db.stories.find({"last_updated": {"$gte": since}})}
-    states = {s["_id"]: s for s in db.state.find({"_id": {"$in": list(stories)}})}
+    states = {s["story_id"]: s for s in db.state.find({"uid": uid, "story_id": {"$in": list(stories)}})}
     arts_by_story: dict[int, list[dict]] = {}
     for a in db.articles.find({"story_id": {"$in": list(stories)}}, {"embedding": 0, "body": 0}):
         arts_by_story.setdefault(a["story_id"], []).append(a)
@@ -78,8 +111,7 @@ def build_card(story: dict, arts: list[dict], sources: dict, muted_publishers: s
     elif imgs:
         best_img = max(imgs, key=lambda a: a["image_w"])
     summary = lead.get("summary") or next((a["summary"] for a in reports if a.get("summary")), "")
-    if summary and summary.lower().startswith(lead["title"].lower()[:60]):
-        summary = summary[len(lead["title"]):].lstrip(" .:-–|")  # don't repeat the headline
+    summary = _strip_headline(summary, lead["title"])  # don't repeat the headline
     publishers = sorted({a["publisher"] for a in reports})
     state = state or {}
     return {
@@ -111,15 +143,17 @@ def build_card(story: dict, arts: list[dict], sources: dict, muted_publishers: s
     }
 
 
-def rank(db, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = None) -> dict:
+def rank(db, uid: int, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = None) -> dict:
     exclude = exclude or set()
-    prefs = D.get_prefs(db)
-    rules = _rules(db)
-    sources = {s["_id"]: s for s in db.sources.find({}, {"trust": 1, "learned_bias": 1, "name": 1})}
+    prefs = D.get_prefs(db, uid)
+    rules = _rules(db, uid)
+    sources = user_sources(db, uid)
     muted_publishers = {r["label"] for r in rules["mute"] if r["kind"] == "source"}
-    now, stories, states, arts_by_story = load_candidates(db)
+    muted_publishers |= {s["name"].split(" · ")[0] for s in sources.values() if s.get("user_enabled") is False and s.get("kind") == "outlet"}
+    off_sources = {sid for sid, s in sources.items() if s.get("user_enabled") is False}
+    now, stories, states, arts_by_story = load_candidates(db, uid)
 
-    clusters = list(db.clusters.find({}))
+    clusters = list(db.clusters.find({"uid": uid}))
     pos = [(D.bin_to_vec(c["centroid"]), effective_weight(c, now)) for c in clusters if c["polarity"] > 0]
     neg = [(D.bin_to_vec(c["centroid"]), effective_weight(c, now)) for c in clusters if c["polarity"] < 0]
     labels = {i: cluster_label(c) for i, c in enumerate(c for c in clusters if c["polarity"] > 0)}
@@ -132,12 +166,12 @@ def rank(db, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = N
             continue
         st = states.get(sid) or {}
         status = st.get("status", "unseen")
-        arts = arts_by_story.get(sid) or []
+        arts = [a for a in (arts_by_story.get(sid) or []) if a.get("source_id") not in off_sources]
         if not arts or status == "hidden":
             continue
         is_update = False
-        if status in ("seen", "liked"):
-            pend = story.get("pending_update_article_id")
+        if status in ("seen", "liked", "fine"):
+            pend = st.get("pending_update_article_id")
             last = D.aware(st.get("last_update_shown"))
             if not pend or pend in (st.get("seen_article_ids") or []):
                 continue
@@ -164,7 +198,8 @@ def rank(db, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = N
             sims = [float(c @ vec) * (w / (w + 2)) for c, w in pos]
             best_cluster = int(np.argmax(sims))
         follow_score = min(1.0, sum(r.get("weight", 1.0) for r in follows) * 0.6)
-        tier = story.get("tier") or "india"
+        tier = user_tier(story, prefs)
+        card["tier"] = tier
         tier_val = float(tiers.get(tier, 0.5))
         R = min(1.0, 0.65 * follow_score + 0.5 * tier_val)
         n = card["source_count"]
@@ -175,13 +210,13 @@ def rank(db, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = N
         F = 0.5 ** (max(age_h, 0) / half)
         trusts = [sources.get(a.get("source_id"), {}).get("trust", 0.6) for a in arts]
         lead_src = sources.get(next((a.get("source_id") for a in arts if a["_id"] == card["article_id"]), None), {})
-        S = max(trusts) + lead_src.get("learned_bias", 0.0)
+        S = max(trusts) + lead_src.get("bias", 0.0)
         score = 0.40 * I + 0.20 * R + 0.15 * M + 0.15 * F + 0.10 * S
         if always:
             score += 1.0
         if is_update:
             score += 0.15 + (0.25 if st.get("followed") else 0)
-            upd_art = next((a for a in arts if a["_id"] == story["pending_update_article_id"]), None)
+            upd_art = next((a for a in arts if a["_id"] == st.get("pending_update_article_id")), None)
             card["type"] = "update"
             card["badge"] = "Update"
             if upd_art:
@@ -230,7 +265,7 @@ def rank(db, mode: str = "foryou", limit: int = 60, exclude: set[int] | None = N
     day_start = now - timedelta(hours=24)
     for st in states.values():
         if st.get("seen_at") and D.aware(st["seen_at"]) >= day_start:
-            s = stories.get(st["_id"])
+            s = stories.get(st["story_id"])
             if s and s.get("thread_id"):
                 shown_today[s["thread_id"]] += 1
     by_thread: dict[int, list[dict]] = {}

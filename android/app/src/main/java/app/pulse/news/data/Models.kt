@@ -107,6 +107,7 @@ data class SeenResponse(
     val cards: List<Card> = emptyList(),
     val topics: List<String> = emptyList(),
     val sources: List<String> = emptyList(),
+    val counts: Map<String, Int> = emptyMap(),
 )
 
 @Serializable
@@ -149,7 +150,11 @@ data class Controls(
     val topics: List<String> = emptyList(),
     val cities: List<City> = emptyList(),
     @SerialName("last_ingest") val lastIngest: Ingest? = null,
+    val username: String? = null,
 )
+
+@Serializable
+data class AppLinks(val releases: String? = null)
 
 @Serializable
 data class Cluster(
@@ -173,7 +178,7 @@ data class Insights(
 data class InteractResponse(val ok: Boolean = true, @SerialName("interaction_id") val interactionId: Long = 0, val weight: Float = 0f)
 
 @Serializable
-data class LoginResponse(val ok: Boolean = true, val token: String? = null)
+data class LoginResponse(val ok: Boolean = true, val token: String? = null, val username: String? = null)
 
 @Serializable
 data class SessionSummary(val note: String? = null, val interactions: Int = 0)

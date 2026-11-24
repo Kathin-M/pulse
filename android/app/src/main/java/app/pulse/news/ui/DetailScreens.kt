@@ -87,6 +87,11 @@ fun StoryDetailScreen(storyId: Int, onClose: () -> Unit, onRead: (Int) -> Unit) 
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextLink("‹ Back", onClick = onClose)
                 Spacer(Modifier.weight(1f))
+                d?.card?.let { card ->
+                    val ctx = LocalContext.current
+                    Pill("Share") { shareStory(ctx, card, scope) }
+                    Spacer(Modifier.width(8.dp))
+                }
                 Pill(if (saved) "Saved" else "Save", selected = saved) {
                     saved = !saved
                     scope.launch { runCatching { Api.interact(storyId, if (saved) "save" else "unsave") }; Toaster.show(if (saved) "Saved for later" else "Removed from saved") }

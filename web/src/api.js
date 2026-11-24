@@ -56,3 +56,14 @@ export function dayBucket(iso) {
   if (diff < 7) return "This week";
   return "Earlier";
 }
+
+/** System share sheet where available, otherwise copy the link. Sharing also tells the ranker it mattered. */
+export async function shareStory(card) {
+  const url = card.url;
+  const title = card.title;
+  interact(card.id > 0 ? card.id : (card.story_ids || [card.id])[0], "share").catch(() => {});
+  if (navigator.share) {
+    try { await navigator.share({ title, text: title, url }); return "shared"; } catch { return null; }
+  }
+  try { await navigator.clipboard.writeText(`${title}\n${url}`); return "copied"; } catch { return null; }
+}

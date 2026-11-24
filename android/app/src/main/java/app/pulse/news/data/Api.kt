@@ -43,7 +43,7 @@ object Api {
                 .build()
             http.newCall(req).execute().use { res ->
                 val text = res.body?.string().orEmpty()
-                if (res.code == 401 && !path.endsWith("/login")) {
+                if (res.code == 401 && !path.endsWith("/login") && !path.endsWith("/password")) {
                     onAuthLost?.invoke()
                     throw ApiException(401, "Please log in again")
                 }
@@ -65,8 +65,10 @@ object Api {
 
     // ---- typed helpers -------------------------------------------------------------------
 
-    suspend fun login(server: String, password: String): LoginResponse =
-        json.decodeFromString(raw("POST", "/api/login", buildJsonObject { put("password", password) }, server))
+    /** Sign in (or create an account when [create] is true). Returns the session token. */
+    suspend fun login(server: String, username: String, password: String, create: Boolean = false): LoginResponse =
+        json.decodeFromString(raw("POST", if (create) "/api/signup" else "/api/login",
+            buildJsonObject { put("username", username); put("password", password) }, server))
 
     suspend fun feed(mode: String, exclude: Collection<Int>): Pair<FeedResponse, String> {
         val text = raw("GET", "/api/feed?mode=$mode&exclude=${exclude.joinToString(",")}")

@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
+import LiquidGlass from "@sasivisvan/glass-morphism";
+import "@sasivisvan/glass-morphism/css";
 import App from "./App.jsx";
 import "./styles.css";
 
@@ -17,6 +19,10 @@ registerSW({
     if (reg) setInterval(() => reg.update(), 30 * 60 * 1000);
   },
 });
+
+// Liquid glass components (segmented control, tab bar, toolbar, switches, sliders).
+// observe: React mounts screens later, so new glass elements are enhanced as they appear.
+LiquidGlass.init({ observe: true, light: "pointer" });
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

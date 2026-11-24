@@ -39,7 +39,19 @@ export default function Controls({ onInsights, onOnboarding, notify }) {
   const [size, setSize] = useState(localStorage.getItem("pulse.size") || "m");
 
   const load = () => api.get("/api/controls").then(setC);
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api.get("/api/app/latest").then((r) => setAppUrl(r.releases)).catch(() => {}); }, []);
+  const [appUrl, setAppUrl] = useState(null);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCur, setPwCur] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const changePw = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post("/api/account/password", { current: pwCur, new: pwNew });
+      setPwOpen(false); setPwCur(""); setPwNew("");
+      notify("Password changed");
+    } catch (err) { notify(err.message); }
+  };
 
   const putPrefs = async (patch) => {
     const prefs = await api.put("/api/prefs", patch);
@@ -189,15 +201,35 @@ export default function Controls({ onInsights, onOnboarding, notify }) {
           </div>
         </Section>
 
-        <Section title="About">
-          <p className="t-chip text-ink-2">
+        <Section title="Account">
+          <p className="t-meta">Signed in as <span className="font-semibold">{c.username}</span></p>
+          <p className="t-chip text-ink-2 mt-1">
             {c.last_ingest ? `News last fetched ${new Date(c.last_ingest.at).toLocaleString()} · ${c.last_ingest.new} new articles` : "Waiting for the first news fetch."}
           </p>
-          <div className="flex gap-2 mt-3">
-            <button onClick={onOnboarding} className="t-meta px-3 py-1.5 rounded-full bg-raised">Redo setup</button>
-            <button onClick={async () => { await api.post("/api/logout"); location.reload(); }} className="t-meta px-3 py-1.5 rounded-full bg-raised">Log out</button>
+          {pwOpen ? (
+            <form onSubmit={changePw} className="space-y-2 mt-3">
+              <input type="password" value={pwCur} onChange={(e) => setPwCur(e.target.value)} placeholder="Current password" autoComplete="current-password"
+                className="w-full bg-raised rounded-full px-4 py-2 t-meta outline-none placeholder:text-ink-2" />
+              <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="New password (6+ characters)" autoComplete="new-password"
+                className="w-full bg-raised rounded-full px-4 py-2 t-meta outline-none placeholder:text-ink-2" />
+              <div className="flex gap-2">
+                <button className="lg-button lg-button--small lg-button--prominent">Save password</button>
+                <button type="button" onClick={() => setPwOpen(false)} className="lg-button lg-button--small">Cancel</button>
+              </div>
+            </form>
+          ) : null}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {!pwOpen && <button onClick={() => setPwOpen(true)} className="lg-button lg-button--small">Change password</button>}
+            <button onClick={onOnboarding} className="lg-button lg-button--small">Redo setup</button>
+            <button onClick={async () => { await api.post("/api/logout"); location.reload(); }} className="lg-button lg-button--small">Log out</button>
           </div>
         </Section>
+
+        {appUrl && (
+          <Section title="Android app" hint="The native app has the same account, offline reading and a morning brief. It updates itself.">
+            <a href={appUrl} target="_blank" rel="noreferrer noopener" className="lg-button lg-button--small lg-button--prominent inline-flex">Download Pulse for Android</a>
+          </Section>
+        )}
       </div>
     </div>
   );

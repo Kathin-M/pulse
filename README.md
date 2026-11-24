@@ -6,14 +6,18 @@ A private, self-hosted news app that shows **one story at a time**, learns from 
 - **Interests that keep up.** Swipes, taps, reading time and pauses all nudge a set of interest clusters, which fade over about a month unless you keep engaging.
 - **You stay in control.** Follow, mute or always show any topic, keyword, place or outlet. A slider per location tier, a trust slider per source, and a discovery slider for how much exploration you want.
 - **A feed that ends.** When the good stories run out you get "You're all caught up", not filler.
+- **Accounts.** Anyone can create an account; each one gets its own feed state, history, learned interests, rules, city and source trust. The news itself is shared.
+- **Liquid glass UI.** The web app uses [@sasivisvan/glass-morphism](https://github.com/Sasivisvan/Glass-Morphism) (segmented control, tab bar, toolbar, buttons); the Android app recreates the same components natively in Compose.
 
 | Gesture | Meaning |
 |---|---|
 | Swipe right / → | More like this (saved to Liked) |
 | Swipe left / ← | Seen, move on (neutral) |
+| Swipe up / ↑ | Fine: it's okay, keep this kind of story steady |
 | Swipe down / ↓ | Less like this |
 | Tap / Enter | Story detail: every outlet, timeline, reader view |
 | Double-tap | Save for later, no ranking change |
+| Share / `s` | System share sheet (also counts as interest) |
 | Undo / `u` | Take back any of the last five swipes |
 
 ## Android app
@@ -22,7 +26,7 @@ A private, self-hosted news app that shows **one story at a time**, learns from 
 story detail, reader view, Seen, Liked, Controls and Insights, an offline copy of your last feed, an optional
 daily "Morning brief" notification, and in-app updates.
 
-- Download `Pulse.apk` from this repo's [Releases](../../releases), install it, and log in with your server address and password.
+- Download `Pulse.apk` from this repo's [Releases](../../releases), install it, and sign in or create an account. Builds made with repo variable `PULSE_DEFAULT_SERVER` need no server address; others ask for one.
 - Each push that touches `android/` builds a signed APK (`.github/workflows/android.yml`) and publishes a release
   tagged `android-<versionCode>`. Installed apps see it and offer **Update** without leaving the app.
 - To publish your own builds: set repo variable `ANDROID_RELEASE=true` and `ANDROID_PACKAGE`, and secrets
@@ -59,15 +63,17 @@ Pulse runs entirely on free tiers:
    - secret `MONGODB_URI`
    - variable `PULSE_DEPLOY` = `true` (turns on the ingest schedule; forks stay off by default)
    - run the **Ingest news** workflow once by hand to fetch your first stories
-4. **Vercel**: import the repo. Framework preset "Other"; `vercel.json` does the rest. Add the environment variables `MONGODB_URI`, `PULSE_PASSWORD` and `PULSE_SECRET` (see `.env.example`).
-5. Open the site on your phone and **Add to Home Screen**. The app updates itself after every deploy.
+4. **Vercel**: import the repo. Framework preset "Other"; `vercel.json` does the rest. Add the environment variables `MONGODB_URI` and `PULSE_SECRET` (see `.env.example`), and optionally `PULSE_APP_REPO` (`owner/repo` whose releases carry the APK) and `PULSE_MAX_USERS`.
+5. Open the site and **Create account**. The web app updates itself after every deploy.
 
-The API refuses to run when hosted without `PULSE_PASSWORD`, so a deployment is never left open by accident.
+Sign-ups are rate limited (`PULSE_SIGNUPS_PER_HOUR`, default 30) and capped (`PULSE_MAX_USERS`, default 1000). The API refuses to start when hosted without `PULSE_SECRET`.
+
+Upgrading from the single-user version: run `OWNER_USERNAME=you PULSE_PASSWORD=old-password python -m worker.migrate_users` once; it creates your account and moves your history onto it.
 
 ### Self-host instead
 
 ```sh
-cp .env.example .env   # set PULSE_PASSWORD and PULSE_SECRET
+cp .env.example .env   # set PULSE_SECRET
 docker compose up -d   # app on :8000, Mongo and the ingest loop included
 ```
 
@@ -75,7 +81,7 @@ docker compose up -d   # app on :8000, Mongo and the ingest loop included
 
 ```sh
 uv venv --python 3.12 && uv pip install -r requirements.txt -r worker/requirements.txt uvicorn
-cp .env.example .env    # point MONGODB_URI at Atlas or a local mongod; leave PULSE_PASSWORD empty for no login
+cp .env.example .env    # point MONGODB_URI at Atlas or a local mongod
 set -a; . ./.env; set +a
 python -m worker.ingest             # fetch news once
 uvicorn pulse.app:app --reload      # API on :8000

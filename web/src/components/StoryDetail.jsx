@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { api, interact, ago } from "../api.js";
+import { api, interact, ago, shareStory } from "../api.js";
 
 function SourceRow({ s, onRead }) {
   return (
@@ -60,6 +60,12 @@ export default function StoryDetail({ storyId, onClose, onRead, notify }) {
       <div className="flex items-center px-5 py-3 gap-3">
         <button onClick={onClose} className="t-meta text-ink-2">‹ Back</button>
         <div className="ml-auto flex gap-2">
+          {d?.card && (
+            <button
+              onClick={async () => { if ((await shareStory(d.card)) === "copied") notify("Link copied"); }}
+              className="t-meta px-3 py-1.5 rounded-full bg-raised"
+            >Share</button>
+          )}
           <button onClick={toggleSave} className={`t-meta px-3 py-1.5 rounded-full ${saved ? "bg-accent text-black" : "bg-raised"}`}>{saved ? "Saved" : "Save"}</button>
           <button onClick={toggleFollow} className={`t-meta px-3 py-1.5 rounded-full ${followed ? "bg-accent text-black" : "bg-raised"}`}>
             {followed ? "Following story" : "Follow story"}

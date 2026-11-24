@@ -159,6 +159,8 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
     val shape = RoundedCornerShape(20.dp)
     val edge = if (card.badge == "Breaking") Modifier.border(2.dp, c.accent, shape) else Modifier
     val title = card.displayTitle
+    // The whole headline, always: long ones step down a size instead of being cut off.
+    val headStyle = if (title.length > 110) Type.headline else Type.headlineXl
 
     when {
         card.layout == "full" && card.image != null -> Box(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge)) {
@@ -169,28 +171,28 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
                 )
             )
             Box(Modifier.padding(16.dp).align(Alignment.TopStart)) { Badge(card) }
-            Column(Modifier.align(Alignment.BottomStart).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
                 SourceRow(card, light = true)
-                Text(title, style = Type.headlineXl, color = Color.White, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Text(title, style = headStyle, color = Color.White)
                 UpdateLine(card, light = true)
                 if (card.type != "update" && !card.summary.isNullOrBlank())
-                    Text(card.summary, style = Type.summary, color = Color.White.copy(alpha = 0.86f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(card.summary, style = Type.summary, color = Color.White.copy(alpha = 0.86f), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Chips(card, onChip, light = true)
                 Why(card, light = true, onWhy)
             }
         }
 
         card.layout == "photo" && card.image != null -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge)) {
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.36f)) {
+            Box(Modifier.fillMaxWidth().fillMaxHeight(if (title.length > 90) 0.28f else 0.36f)) {
                 NewsImage(card.image, card.lqip, Modifier.fillMaxSize())
                 Box(Modifier.padding(16.dp)) { Badge(card) }
             }
             Column(Modifier.weight(1f).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SourceRow(card, light = false)
-                Text(title, style = Type.headline, color = c.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(title, style = Type.headline, color = c.text)
                 UpdateLine(card, light = false)
                 if (card.type != "update" && !card.summary.isNullOrBlank())
-                    Text(card.summary, style = Type.summary, color = c.text.copy(alpha = 0.86f), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(card.summary, style = Type.summary, color = c.text.copy(alpha = 0.86f), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 ThreadHeadlines(card)
                 Spacer(Modifier.weight(1f))
                 Chips(card, onChip, light = false)
@@ -208,14 +210,14 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
             Badge(card)
             Text(
                 card.publisher, fontFamily = Newsreader, fontWeight = FontWeight.SemiBold,
-                fontSize = (40 * Store.textScale).sp, lineHeight = (44 * Store.textScale).sp,
+                fontSize = ((if (title.length > 90) 28 else 40) * Store.textScale).sp, lineHeight = ((if (title.length > 90) 32 else 44) * Store.textScale).sp,
                 color = c.text2.copy(alpha = 0.55f), maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             Box(Modifier.width(56.dp).height(2.dp).background(c.accent))
-            Text(title, style = Type.headlineXl, color = c.text, maxLines = 5, overflow = TextOverflow.Ellipsis)
+            Text(title, style = headStyle, color = c.text)
             UpdateLine(card, light = false)
             if (card.type != "update" && !card.summary.isNullOrBlank())
-                Text(card.summary, style = Type.summary, color = c.text.copy(alpha = 0.86f), maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Text(card.summary, style = Type.summary, color = c.text.copy(alpha = 0.86f), maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             ThreadHeadlines(card)
             Spacer(Modifier.weight(1f))
             SourceRow(card, light = false)

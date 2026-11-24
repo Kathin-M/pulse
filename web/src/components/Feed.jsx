@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { api, interact, haptic } from "../api.js";
+import { api, interact, haptic, shareStory } from "../api.js";
 import Stack from "./Stack.jsx";
 
 const MODES = [
@@ -181,6 +181,11 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
     haptic(8);
   }, [undoStack]);
 
+  const share = useCallback(async (card) => {
+    const r = await shareStory(card);
+    if (r === "copied") notify("Link copied");
+  }, [notify]);
+
   // Desktop: arrow keys work like swipes.
   useEffect(() => {
     const onKey = (e) => {
@@ -188,6 +193,8 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
       if (e.key === "ArrowRight") stackRef.current?.fly("right");
       else if (e.key === "ArrowLeft") stackRef.current?.fly("left");
       else if (e.key === "ArrowDown") stackRef.current?.fly("down");
+      else if (e.key === "ArrowUp") stackRef.current?.fly("up");
+      else if (e.key === "s" && queue?.[0]) share(queue[0]);
       else if (e.key === "Enter" && queue?.[0]) onOpen(queue[0].id > 0 ? queue[0].id : queue[0].story_ids[0]);
       else if (e.key === "u" || e.key === "Backspace") undo();
       else return;
@@ -195,26 +202,35 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [queue, undo, onOpen, thread]);
+  }, [queue, undo, onOpen, thread, share]);
 
   const total = done + (queue?.length || 0);
   const progress = total ? done / total : 0;
+  const segRef = useRef(null);
+  useEffect(() => { segRef.current?.lgSelect?.(MODES.findIndex(([k]) => k === mode)); }, [mode]);
 
   return (
     <div className="h-full flex flex-col safe-top">
-      {/* progress */}
-      <div className="h-[3px] bg-divider/60">
-        <motion.div className="h-full bg-accent" animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.25 }} />
-      </div>
-      <header className={`flex items-center px-5 pt-3 pb-2 gap-5 transition-opacity duration-200 ${dragging ? "opacity-0" : ""}`}>
-        {MODES.map(([key, label]) => (
-          <button key={key} onClick={() => setMode(key)} className={`t-meta pb-1 ${mode === key ? "text-ink border-b-2 border-accent" : "text-ink-2"}`}>
-            {label}
+      {/* top bar: liquid-glass segmented control + undo, with a thin progress line */}
+      <header className={`px-3 pt-2 pb-2 transition-opacity duration-200 ${dragging ? "opacity-0" : ""}`}>
+        <div className="flex items-center gap-2">
+          <div ref={segRef} className="lg-segmented flex-1" data-liquid-glass="regular">
+            {MODES.map(([key, label]) => (
+              <button key={key} aria-pressed={mode === key} onClick={() => setMode(key)}>{label}</button>
+            ))}
+          </div>
+          <button
+            onClick={undo} disabled={!undoStack.length} aria-label="Undo last swipe"
+            className="lg-button lg-button--icon !h-[44px] !w-[44px] disabled:opacity-40" data-liquid-glass="regular"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
           </button>
-        ))}
-        <div className="ml-auto flex items-center gap-4">
-          {total > 0 && <span className="t-chip text-ink-2">{Math.min(done + 1, total)} of {total}</span>}
-          <button onClick={undo} disabled={!undoStack.length} className={`t-meta ${undoStack.length ? "text-ink" : "text-ink-2/40"}`}>↶ Undo</button>
+        </div>
+        <div className="flex items-center gap-3 mt-2 px-1">
+          <div className="flex-1 h-[3px] rounded-full bg-divider/70 overflow-hidden">
+            <motion.div className="h-full bg-accent rounded-full" animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.25 }} />
+          </div>
+          {total > 0 && <span className="t-chip text-ink-2 tabular-nums">{Math.min(done + 1, total)} / {total}</span>}
         </div>
       </header>
 
@@ -251,11 +267,20 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
         )}
       </div>
 
-      {/* thumb-reach actions (also what the gestures do) */}
-      <div className={`grid grid-cols-3 px-5 pb-2 transition-opacity duration-200 ${dragging || !queue?.length ? "opacity-0 pointer-events-none" : ""}`}>
-        <button onClick={() => stackRef.current?.fly("left")} className="py-2 t-meta text-ink-2 text-left">← Seen</button>
-        <button onClick={() => stackRef.current?.fly("down")} className="py-2 t-meta text-ink-2 text-center">↓ Less</button>
-        <button onClick={() => stackRef.current?.fly("right")} className="py-2 t-meta text-ink-2 text-right">More →</button>
+      {/* thumb-reach actions in a glass toolbar (also what the gestures do) */}
+      <div className={`flex justify-center px-3 pb-1 transition-opacity duration-200 ${dragging || !queue?.length ? "opacity-0 pointer-events-none" : ""}`}>
+        <div className="lg-toolbar" data-liquid-glass="regular">
+          <button onClick={() => stackRef.current?.fly("left")} aria-label="Seen">← Seen</button>
+          <button onClick={() => stackRef.current?.fly("down")} aria-label="Less like this">↓ Less</button>
+          <hr />
+          <button onClick={() => queue?.[0] && share(queue[0])} aria-label="Share">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13" /><path d="m7 8 5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>
+            Share
+          </button>
+          <hr />
+          <button onClick={() => stackRef.current?.fly("up")} aria-label="Fine">↑ Fine</button>
+          <button onClick={() => stackRef.current?.fly("right")} aria-label="More like this" className="!text-accent">More →</button>
+        </div>
       </div>
 
       <AnimatePresence>{chip && <ChipMenu chip={chip} onClose={() => setChip(null)} notify={notify} />}</AnimatePresence>

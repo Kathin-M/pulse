@@ -95,3 +95,27 @@ body { margin: 0; }
 input[type="range"] { accent-color: var(--accent); }
 
 .reader p { margin: 0 0 1.1em; font-family: var(--font-serif); font-size: calc(19px * var(--scale)); line-height: 1.6; }
+
+/* ---- Liquid glass (from @sasivisvan/glass-morphism), tuned to Pulse's colours ---- */
+:root {
+  --lg-accent: var(--accent);
+  --lg-on: var(--more);
+}
+.lg-segmented, .lg-tabbar, .lg-toolbar { --lg-tint: rgba(18, 18, 20, .45); color: var(--text); }
+:root[data-theme="light"] .lg-segmented, :root[data-theme="light"] .lg-tabbar, :root[data-theme="light"] .lg-toolbar,
+:root[data-theme="light"] .lg { --lg-tint: rgba(255, 255, 255, .55); --lg-rim: .7; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .lg-segmented, :root:not([data-theme="dark"]) .lg-tabbar,
+  :root:not([data-theme="dark"]) .lg-toolbar, :root:not([data-theme="dark"]) .lg { --lg-tint: rgba(255, 255, 255, .55); --lg-rim: .7; }
+}
+.lg-tabbar { height: 60px; }
+.lg-tabbar__item { font-family: var(--font-sans); font-size: 11px; font-weight: 600; gap: 2px; color: var(--text-2); }
+.lg-tabbar__item[aria-current] { color: var(--accent); }
+.lg-segmented > button { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--text-2); flex: 1; }
+.lg-segmented > button[aria-pressed="true"] { color: var(--text); }
+.lg-segmented.on-photo > button { color: rgba(255,255,255,.75); }
+.lg-segmented.on-photo > button[aria-pressed="true"] { color: #fff; }
+.lg-toolbar > button { color: var(--text); font-family: var(--font-sans); font-size: 13px; font-weight: 600; width: auto; padding: 0 11px; gap: 5px; display: inline-flex; flex-direction: row; align-items: center; white-space: nowrap; }
+.lg-button { font-family: var(--font-sans); color: var(--text); }
+.lg-button--prominent { color: #000; }
+.login-bg { background: radial-gradient(1200px 600px at 20% 10%, rgba(245,165,36,.18), transparent 60%), radial-gradient(900px 500px at 90% 90%, rgba(61,214,140,.10), transparent 60%), var(--bg); }

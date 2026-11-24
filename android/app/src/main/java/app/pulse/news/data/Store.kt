@@ -21,13 +21,18 @@ object Store {
         textScale = sp.getFloat("text_scale", 1f)
     }
 
+    /** The Pulse server; defaults to the one this build was made for, so new users only need an account. */
     var server: String
-        get() = sp.getString("server", "") ?: ""
+        get() = (sp.getString("server", "") ?: "").ifBlank { app.pulse.news.BuildConfig.DEFAULT_SERVER }
         set(v) = sp.edit().putString("server", v).apply()
 
     var token: String
         get() = sp.getString("token", "") ?: ""
         set(v) = sp.edit().putString("token", v).apply()
+
+    var username: String
+        get() = sp.getString("username", "") ?: ""
+        set(v) = sp.edit().putString("username", v).apply()
 
     var loggedIn: Boolean
         get() = sp.getBoolean("logged_in", false)

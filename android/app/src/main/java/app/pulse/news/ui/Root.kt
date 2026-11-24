@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -77,55 +78,81 @@ fun PulseRoot() {
 fun LoginScreen(onDone: () -> Unit) {
     val c = LocalColors.current
     val scope = rememberCoroutineScope()
-    var server by remember { mutableStateOf(Store.server.ifBlank { BuildConfig.DEFAULT_SERVER }) }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    var create by remember { mutableStateOf(false) }
+    var username by remember { mutableStateOf(Store.username) }
     var password by remember { mutableStateOf("") }
+    var server by remember { mutableStateOf(Store.server) }
+    var showServer by remember { mutableStateOf(BuildConfig.DEFAULT_SERVER.isBlank()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    val focus = androidx.compose.ui.platform.LocalFocusManager.current
 
     fun submit() {
         var url = server.trim().trimEnd('/')
-        if (url.isEmpty()) { error = "Enter your Pulse server address"; return }
+        if (url.isEmpty()) { error = "Enter your Pulse server address"; showServer = true; return }
         if (!url.startsWith("http")) url = "https://$url"
         busy = true; error = null
         scope.launch {
-            runCatching { Api.login(url, password) }
+            runCatching { Api.login(url, username.trim(), password, create) }
                 .onSuccess { r ->
                     Store.server = url
                     Store.token = r.token.orEmpty()
+                    Store.username = r.username ?: username.trim().lowercase()
                     Store.loggedIn = true
                     onDone()
                 }
-                .onFailure { error = if ((it as? app.pulse.news.data.ApiException)?.code == 401) "Wrong password" else (it.message ?: "Can't reach the server") }
+                .onFailure { error = it.message ?: "Can't reach the server" }
             busy = false
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+    Box(
+        Modifier.fillMaxSize().background(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(c.accent.copy(alpha = 0.22f), androidx.compose.ui.graphics.Color.Transparent),
+                center = androidx.compose.ui.geometry.Offset(150f, 300f), radius = 1100f,
+            )
+        )
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Image(painterResource(R.drawable.ic_pulse_line), null, Modifier.size(84.dp))
-            Text("Pulse", style = Type.title.copy(fontSize = Type.title.fontSize * 1.25f), color = c.text)
+        // scrolls instead of squashing the card when the keyboard opens
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(22.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)) {
+                Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Image(painterResource(R.drawable.ic_pulse_line), null, Modifier.size(64.dp))
+                        Text("Pulse", style = Type.title.copy(fontSize = Type.title.fontSize * 1.2f), color = c.text)
+                    }
+                    Text("Your news, one story at a time. It learns what you like.", style = Type.summary, color = c.text2)
+                    GlassSegmented(listOf("Sign in", "Create account"), if (create) 1 else 0, { create = it == 1 }, Modifier.fillMaxWidth())
+                    SearchField(
+                        username, { username = it }, "Username",
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                        onAction = { focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) },
+                    )
+                    SearchField(
+                        password, { password = it }, "Password", password = true,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                        onAction = { if (username.isNotBlank() && password.isNotEmpty() && !busy) submit() },
+                    )
+                    if (create) Text("3–24 letters, numbers, dots or underscores. Password at least 6 characters.", style = Type.chip, color = c.text2)
+                    if (showServer) {
+                        Text("Server", style = Type.chip, color = c.text2)
+                        SearchField(server, { server = it }, "your-pulse.vercel.app", keyboard = androidx.compose.ui.text.input.KeyboardType.Uri)
+                    }
+                    error?.let { Text(it, style = Type.meta, color = c.less) }
+                    PrimaryButton(
+                        if (busy) "One moment…" else if (create) "Create account" else "Sign in",
+                        Modifier.fillMaxWidth(), enabled = !busy && username.isNotBlank() && password.isNotEmpty(),
+                    ) { submit() }
+                    if (!showServer) TextLink("Use a different Pulse server", modifier = Modifier.align(Alignment.CenterHorizontally)) { showServer = true }
+                }
+            }
         }
-        Text("Your private news. One story at a time.", style = Type.summary, color = c.text2)
-        Spacer(Modifier.height(8.dp))
-        Text("Server", style = Type.chip, color = c.text2)
-        SearchField(
-            server, { server = it }, "your-pulse.vercel.app",
-            keyboard = androidx.compose.ui.text.input.KeyboardType.Uri,
-            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
-            onAction = { focus.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) },
-        )
-        Text("Password", style = Type.chip, color = c.text2)
-        SearchField(
-            password, { password = it }, "Password", password = true,
-            imeAction = androidx.compose.ui.text.input.ImeAction.Go,
-            onAction = { if (password.isNotEmpty() && !busy) submit() },
-        )
-        error?.let { Text(it, style = Type.meta, color = c.less) }
-        PrimaryButton(if (busy) "Checking…" else "Open Pulse", Modifier.fillMaxWidth(), enabled = !busy && password.isNotEmpty()) { submit() }
+        }
     }
 }
 
@@ -229,18 +256,16 @@ fun MainScreen(onLogout: () -> Unit) {
                     Tab.Controls -> ControlsScreen(onInsights = { insights = true }, onOnboarding = { onboarding = true }, onLogout = onLogout)
                 }
             }
-            // bottom navigation, within thumb reach; fades while you swipe
-            Column(Modifier.fillMaxWidth().background(c.bg).alpha(if (dragging) 0f else 1f).navigationBarsPadding()) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Tab.entries.forEach { t ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            TextLink(t.label, color = if (tab == t) c.text else c.text2) { tab = t }
-                            Box(Modifier.width(24.dp).height(2.dp).background(if (tab == t) c.accent else androidx.compose.ui.graphics.Color.Transparent))
-                        }
-                    }
-                }
-            }
+            // floating glass tab bar, within thumb reach; fades while you swipe
+            GlassTabBar(
+                items = listOf(
+                    TabItem("Feed", PulseIcons.Feed), TabItem("Seen", PulseIcons.Seen),
+                    TabItem("Liked", PulseIcons.Liked), TabItem("Controls", PulseIcons.Controls),
+                ),
+                selected = Tab.entries.indexOf(tab),
+                onSelect = { tab = Tab.entries[it] },
+                modifier = Modifier.fillMaxWidth().alpha(if (dragging) 0f else 1f).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
 
         Overlay(visible = insights, fromRight = true) { Box(Modifier.statusBarsPadding()) { InsightsScreen(onBack = { insights = false }) } }

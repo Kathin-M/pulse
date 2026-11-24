@@ -114,6 +114,8 @@ export default function Card({ card, onChip, onWhy }) {
   const breaking = card.badge === "Breaking";
   const edge = breaking ? "ring-2 ring-accent" : "";
   const title = card.type === "thread" ? card.thread_title : card.title;
+  // Whole headline, always: long ones step down a size instead of being cut off.
+  const big = (title || "").length > 110 ? "t-headline" : "t-headline-xl";
 
   if (card.layout === "full" && card.image) {
     return (
@@ -124,11 +126,11 @@ export default function Card({ card, onChip, onWhy }) {
           style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.85) 100%)" }}
         />
         <div className="absolute top-4 left-4"><Badge card={card} light /></div>
-        <div className="absolute inset-x-0 bottom-0 p-5 space-y-3 text-white">
+        <div className="absolute inset-x-0 bottom-0 top-14 p-5 flex flex-col justify-end gap-3 text-white overflow-hidden">
           <SourceRow card={card} light />
-          <h2 className="t-headline-xl clamp-3">{title}</h2>
+          <h2 className={`${big} shrink-0`}>{title}</h2>
           <UpdateLine card={card} light />
-          {card.type !== "update" && card.summary && <p className="t-summary text-white/85 clamp-2">{card.summary}</p>}
+          {card.type !== "update" && card.summary && <p className="t-summary text-white/85 clamp-2 min-h-0 overflow-hidden">{card.summary}</p>}
           <Chips card={card} onChip={onChip} light />
           <Why card={card} onWhy={onWhy} light />
         </div>
@@ -139,15 +141,15 @@ export default function Card({ card, onChip, onWhy }) {
   if (card.layout === "photo" && card.image) {
     return (
       <div className={`h-full w-full rounded-[20px] overflow-hidden bg-surface flex flex-col ${edge}`}>
-        <div className="relative h-[36%] shrink-0">
+        <div className={`relative ${(title || "").length > 90 ? "h-[28%]" : "h-[36%]"} shrink-0`}>
           <Img card={card} className="absolute inset-0" />
           <div className="absolute top-4 left-4"><Badge card={card} light /></div>
         </div>
         <div className="flex-1 min-h-0 p-5 flex flex-col gap-3">
           <SourceRow card={card} />
-          <h2 className="t-headline clamp-3">{title}</h2>
+          <h2 className="t-headline shrink-0">{title}</h2>
           <UpdateLine card={card} />
-          {card.type !== "update" && card.summary && <p className="t-summary text-ink/85 clamp-3">{card.summary}</p>}
+          {card.type !== "update" && card.summary && <p className="t-summary text-ink/85 clamp-3 min-h-0 overflow-hidden">{card.summary}</p>}
           <ThreadStack card={card} />
           <div className="mt-auto space-y-3">
             <Chips card={card} onChip={onChip} />
@@ -167,13 +169,13 @@ export default function Card({ card, onChip, onWhy }) {
       <div className="flex items-center gap-3">
         <Badge card={card} />
       </div>
-      <div className="font-serif text-[40px] leading-[44px] font-semibold text-ink-2/60 clamp-2" style={{ fontSize: `calc(40px * var(--scale))` }}>
+      <div className="font-serif text-[40px] leading-[44px] font-semibold text-ink-2/60 clamp-2 shrink-0" style={{ fontSize: `calc(${(title || "").length > 90 ? 28 : 40}px * var(--scale))`, lineHeight: 1.1 }}>
         {card.publisher}
       </div>
       <div className="h-[2px] w-14 bg-accent" />
-      <h2 className="t-headline-xl clamp-4">{title}</h2>
+      <h2 className={`${big} shrink-0`}>{title}</h2>
       <UpdateLine card={card} />
-      {card.type !== "update" && card.summary && <p className="t-summary text-ink/85 clamp-4">{card.summary}</p>}
+      {card.type !== "update" && card.summary && <p className="t-summary text-ink/85 clamp-4 min-h-0 overflow-hidden">{card.summary}</p>}
       <ThreadStack card={card} />
       <div className="mt-auto space-y-3">
         <SourceRow card={card} />

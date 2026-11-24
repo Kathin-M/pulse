@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -232,4 +233,21 @@ fun rememberFlag(initial: Boolean = false) = remember { mutableStateOf(initial) 
 @Composable
 fun SpacedRow(content: @Composable () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { content() }
+}
+
+/** Android share sheet for a story; sharing also tells the ranker it mattered. */
+fun shareStory(ctx: Context, card: app.pulse.news.data.Card, scope: kotlinx.coroutines.CoroutineScope) {
+    scope.launch_safe { app.pulse.news.data.Api.interact(card.storyIdForDetail, "share") }
+    shareText(ctx, card.displayTitle, card.url)
+}
+
+fun shareText(ctx: Context, title: String, url: String) {
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT, title)
+        .putExtra(Intent.EXTRA_TEXT, "$title\n$url")
+    ctx.startActivity(Intent.createChooser(send, "Share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+private fun kotlinx.coroutines.CoroutineScope.launch_safe(block: suspend () -> Unit) {
+    launch { runCatching { block() } }
 }

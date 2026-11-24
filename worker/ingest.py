@@ -79,7 +79,7 @@ def embed(texts: list[str]) -> np.ndarray:
 def upsert_source(db, s: dict) -> None:
     doc = {"name": s["name"], "kind": s.get("kind", "outlet"), "tier": s.get("tier"),
            "topic_hint": s.get("topic_hint"), "query": s.get("query")}
-    for k in ("rule_id", "cluster_id"):
+    for k in ("rule_id", "cluster_id", "city", "state"):
         if k in s:
             doc[k] = s[k]
     db.sources.update_one(
@@ -90,20 +90,26 @@ def upsert_source(db, s: dict) -> None:
     )
 
 
+def all_prefs(db) -> list[dict]:
+    uids = [u["_id"] for u in db.users.find({}, {"_id": 1})]
+    return [D.get_prefs(db, uid) | {"uid": uid} for uid in uids]
+
+
 def sync_sources(db) -> None:
-    prefs = D.get_prefs(db)
     if db.sources.count_documents({"kind": {"$in": ["outlet", "google"]}}) == 0:
         for s in default_sources():
             upsert_source(db, s)
 
-    # City / state feeds follow the current preference.
-    wanted = city_sources(prefs["city"], prefs["state"])
-    wanted_urls = {s["url"] for s in wanted}
-    for s in wanted:
+    # City / state feeds for every city any user has picked.
+    wanted = {}
+    for p in all_prefs(db) or [D.DEFAULT_PREFS]:
+        for s in city_sources(p["city"], p["state"]):
+            wanted[s["url"]] = s
+    for s in wanted.values():
         upsert_source(db, s)
-    db.sources.delete_many({"kind": "city", "url": {"$nin": list(wanted_urls)}})
+    db.sources.delete_many({"kind": "city", "url": {"$nin": list(wanted)}})
 
-    # Followed keywords / places / niche topics become Google News search feeds.
+    # Followed keywords / places / niche topics (any user) become Google News search feeds.
     broad = set(T.SECTION_TOPICS.values())
     rule_urls = set()
     for r in db.rules.find({"mode": {"$in": ["follow", "always"]}, "kind": {"$in": ["keyword", "place", "topic"]}}):
@@ -111,28 +117,32 @@ def sync_sources(db) -> None:
             continue
         q = f'"{r["label"]}"' if r["kind"] != "topic" else r["label"]
         url = google_search_url(q)
+        if url in rule_urls:
+            continue
         rule_urls.add(url)
         upsert_source(db, {"url": url, "name": f"Search · {r['label']}", "kind": "google_search",
-                           "tier": None, "query": q, "rule_id": r["_id"],
-                           "topic_hint": r["label"] if r["kind"] == "topic" else None})
+                           "tier": None, "query": q, "topic_hint": r["label"] if r["kind"] == "topic" else None})
     db.sources.delete_many({"kind": "google_search", "url": {"$nin": list(rule_urls)}})
 
-    # Strong learned interests spawn their own search feeds (max 8).
+    # Each user's strongest learned interests spawn search feeds (3 per user, 40 overall).
     auto_urls = set()
-    clusters = list(db.clusters.find({"polarity": 1}))
-    clusters.sort(key=lambda c: -effective_weight(c))
-    for c in clusters[:8]:
-        if effective_weight(c) < 2.5 or c.get("signals", 0) < 4:
-            continue
-        terms = [t for t, _ in Counter(c.get("terms") or {}).most_common(6)
-                 if T.place_kind(t) is None and len(t) > 2][:2]
-        if not terms:
-            continue
-        q = " ".join(f'"{t}"' for t in terms)
-        url = google_search_url(q)
-        auto_urls.add(url)
-        upsert_source(db, {"url": url, "name": f"Learned · {' + '.join(terms)}", "kind": "auto_interest",
-                           "tier": None, "query": q, "cluster_id": c["_id"]})
+    by_user: dict = {}
+    for c in db.clusters.find({"polarity": 1}):
+        by_user.setdefault(c.get("uid"), []).append(c)
+    for clusters in by_user.values():
+        clusters.sort(key=lambda c: -effective_weight(c))
+        for c in clusters[:3]:
+            if len(auto_urls) >= 40 or effective_weight(c) < 2.5 or c.get("signals", 0) < 4:
+                continue
+            terms = [t for t, _ in Counter(c.get("terms") or {}).most_common(6)
+                     if T.place_kind(t) is None and len(t) > 2][:2]
+            if not terms:
+                continue
+            q = " ".join(f'"{t}"' for t in terms)
+            url = google_search_url(q)
+            auto_urls.add(url)
+            upsert_source(db, {"url": url, "name": f"Learned · {' + '.join(terms)}", "kind": "auto_interest",
+                               "tier": None, "query": q, "cluster_id": c["_id"]})
     db.sources.delete_many({"kind": "auto_interest", "url": {"$nin": list(auto_urls)}})
 
 
@@ -248,7 +258,6 @@ def poll_all(db) -> list[tuple[dict, dict]]:
 
 # ------------------------------------------------------------------ insert + enrich
 def insert_new(db, polled: list[tuple[dict, dict]]) -> list[dict]:
-    prefs = D.get_prefs(db)
     since = D.now() - timedelta(hours=WINDOW_H + 24)
     seen_urls = set()
     seen_titles = {d["title_norm"] for d in db.articles.find({"published_at": {"$gte": since}}, {"title_norm": 1})}
@@ -286,8 +295,8 @@ def insert_new(db, polled: list[tuple[dict, dict]]) -> list[dict]:
             "entities": T.entities(it["title"] + ". " + (it["summary"] or "")),
             "kind": T.article_kind(it["url"], it["title"]), "has_video": False,
             "needs_fetch": True, "source_tier": src.get("tier"),
+            "src_city": src.get("city"), "src_state": src.get("state") if src.get("kind") == "city" else None,
         }
-        doc["tier"] = T.story_tier(places, prefs, src.get("tier"))
         docs.append(doc)
     db.articles.insert_many(docs, ordered=False)
     log.info("inserted %d new articles", len(docs))
@@ -417,8 +426,8 @@ def refresh_stories(db, sids: set[int], trust: dict) -> None:
         topics = Counter(t for a in arts for t in a["topics"])
         places = Counter(p for a in arts for p in a["places"])
         ents = Counter(e for a in arts for e in a["entities"])
-        tiers = Counter(a.get("tier") for a in arts)
-        tier = "city" if tiers.get("city") else "state" if tiers.get("state") else tiers.most_common(1)[0][0]
+        hints = Counter(a.get("source_tier") for a in arts if a.get("source_tier") in ("india", "world"))
+        tier_hint = hints.most_common(1)[0][0] if hints else None
         lead = max(reports, key=lambda a: (trust.get(a.get("source_id"), 0.6), (a.get("body_len") or 0) > 600,
                                            a.get("body_len") or len(a.get("summary") or "")))
         ops.append(UpdateOne({"_id": sid}, {"$set": {
@@ -429,7 +438,9 @@ def refresh_stories(db, sids: set[int], trust: dict) -> None:
             "topics": [t for t, _ in topics.most_common(3)],
             "places": [p for p, _ in places.most_common(4)],
             "entities": [e for e, _ in ents.most_common(12)],
-            "tier": tier,
+            "tier_hint": tier_hint,
+            "src_cities": sorted({a["src_city"] for a in arts if a.get("src_city")}),
+            "src_states": sorted({a["src_state"] for a in arts if a.get("src_state")}),
             "lead_article_id": lead["_id"],
         }}))
     for i in range(0, len(ops), 500):
@@ -444,12 +455,13 @@ def flag_updates(db, new_docs: list[dict]) -> None:
             by_story.setdefault(d["story_id"], []).append(d)
     if not by_story:
         return
-    states = {s["_id"]: s for s in db.state.find({"_id": {"$in": list(by_story)}, "status": {"$in": ["seen", "liked"]}})}
+    states = list(db.state.find({"story_id": {"$in": list(by_story)}, "status": {"$in": ["seen", "liked", "fine"]}}))
     if not states:
         return
-    seen_ids = {i for st in states.values() for i in (st.get("seen_article_ids") or [])}
+    seen_ids = {i for st in states for i in (st.get("seen_article_ids") or [])}
     seen_arts = {a["_id"]: a for a in db.articles.find({"_id": {"$in": list(seen_ids)}}, {"embedding": 1, "entities": 1})}
-    for sid, st in states.items():
+    for st in states:
+        sid = st["story_id"]
         seen = [seen_arts[i] for i in (st.get("seen_article_ids") or []) if i in seen_arts]
         if not seen:
             continue
@@ -460,7 +472,7 @@ def flag_updates(db, new_docs: list[dict]) -> None:
             sim = float((M @ D.bin_to_vec(d["embedding"])).max())
             new_names = _keys(d) - seen_keys
             if sim < threshold and (new_names or st.get("followed")):
-                db.stories.update_one({"_id": sid}, {"$set": {"pending_update_article_id": d["_id"]}})
+                db.state.update_one({"_id": st["_id"]}, {"$set": {"pending_update_article_id": d["_id"]}})
                 break
 
 
@@ -565,7 +577,6 @@ def fetch_pages(db, trust: dict) -> set[int]:
     touched: set[int] = set()
     if not todo:
         return touched
-    prefs = D.get_prefs(db)
     done = 0
     ops: list = []
     with httpx.Client(headers={"User-Agent": UA, "Accept-Language": "en-IN,en;q=0.9"}, follow_redirects=True,
@@ -579,8 +590,6 @@ def fetch_pages(db, trust: dict) -> set[int]:
                 except Exception as e:
                     log.debug("fetch failed %s %s", a["url"], e)
                     upd = {"needs_fetch": False}
-                if "places" in upd:
-                    upd["tier"] = T.story_tier(upd["places"], prefs, a.get("source_tier"))
                 if upd.get("body"):
                     upd["body_len"] = len(upd["body"])
                 ops.append(UpdateOne({"_id": a["_id"]}, {"$set": upd}))
@@ -666,14 +675,14 @@ def embed_rules(db) -> None:
 
 
 def prune(db) -> None:
-    keep = [s["_id"] for s in db.state.find({"$or": [{"status": "liked"}, {"saved": True}]}, {"_id": 1})]
+    keep = db.state.distinct("story_id", {"$or": [{"status": "liked"}, {"saved": True}]})
     old = D.now() - timedelta(days=14)
     res = db.articles.delete_many({"published_at": {"$lt": old}, "story_id": {"$nin": keep}})
     db.articles.update_many({"published_at": {"$lt": D.now() - timedelta(days=5)}, "story_id": {"$nin": keep},
                              "body": {"$ne": None}}, {"$set": {"body": None}})
     live_ids = db.articles.distinct("story_id")
     db.stories.delete_many({"_id": {"$nin": live_ids}})
-    db.state.delete_many({"_id": {"$nin": live_ids}})
+    db.state.delete_many({"story_id": {"$nin": live_ids}})
     db.threads.delete_many({"updated_at": {"$lt": old}})
     db.interactions.delete_many({"created_at": {"$lt": D.now() - timedelta(days=365)}})
     if res.deleted_count:
@@ -682,7 +691,7 @@ def prune(db) -> None:
 
 def recluster(db, trust: dict) -> None:
     """Dev helper: throw away stories that nobody has interacted with and cluster again."""
-    keep = set(db.state.distinct("_id"))
+    keep = set(db.state.distinct("story_id"))
     since = D.now() - timedelta(hours=WINDOW_H)
     docs = list(db.articles.find({"published_at": {"$gte": since}, "story_id": {"$nin": list(keep)}}, {"body": 0}))
     db.articles.update_many({"_id": {"$in": [d["_id"] for d in docs]}}, {"$set": {"story_id": None}})
