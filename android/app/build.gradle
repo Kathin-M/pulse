@@ -1,0 +1,43 @@
+plugins { id "com.android.application" }
+
+// All deployment-specific values come from the environment (set by CI), so the
+// open-source repo carries no personal URLs or package names.
+def env = { String k, String d -> System.getenv(k) ?: d }
+def host = env("PULSE_HOST", "localhost")
+
+android {
+    namespace "app.pulse.news"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId env("ANDROID_PACKAGE", "app.pulse.news")
+        minSdk 24
+        targetSdk 35
+        versionCode Integer.parseInt(env("VERSION_CODE", "1"))
+        versionName "1." + env("VERSION_CODE", "1")
+        buildConfigField "String", "PULSE_HOST", "\"${host}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    signingConfigs {
+        release {
+            storeFile file(env("KEYSTORE_PATH", "release.keystore"))
+            storePassword env("KEYSTORE_PASSWORD", "")
+            keyAlias env("KEY_ALIAS", "pulse")
+            keyPassword env("KEYSTORE_PASSWORD", "")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

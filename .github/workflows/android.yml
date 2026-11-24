@@ -1,14 +1,14 @@
 name: Android APK
 
-# Builds a signed APK (a Trusted Web Activity) that opens the deployed site full screen.
-# The APK loads the live site, so app updates arrive with every web deploy; rebuild
-# only when the icon, name or this config changes. Output: the "android" GitHub release.
+# Builds a signed APK: a full-screen WebView on the deployed site. It loads the live
+# app, so web deploys update it; rebuild only when files under android/ change.
+# Output: the "android" GitHub release (Pulse.apk).
 # Needs: vars PULSE_HOST, ANDROID_PACKAGE; secrets ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD.
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml", "web/public/icon-*.png"]
+    paths: ["android/**", ".github/workflows/android.yml"]
 
 permissions:
   contents: write
@@ -24,36 +24,27 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: actions/setup-node@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
-          node-version: 22
-      - name: Prepare TWA project
+          gradle-version: "8.11.1"
+      - name: Build signed APK
+        working-directory: android
         env:
           PULSE_HOST: ${{ vars.PULSE_HOST }}
           ANDROID_PACKAGE: ${{ vars.ANDROID_PACKAGE }}
           VERSION_CODE: ${{ github.run_number }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
-          mkdir -p build-android ~/.bubblewrap
-          envsubst < android/twa-manifest.template.json > build-android/twa-manifest.json
-          printf '%s' "$KEYSTORE_B64" | base64 -d > build-android/android.keystore
-          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
-          # Bubblewrap validates the SDK by looking for the legacy tools/ folder.
-          [ -e "$ANDROID_HOME/tools" ] || sudo ln -s "$ANDROID_HOME/cmdline-tools/latest" "$ANDROID_HOME/tools"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          export KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          npm install -g @bubblewrap/cli@1
-      - name: Build APK
-        working-directory: build-android
-        env:
-          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: |
-          bubblewrap update --skipVersionUpgrade
-          bubblewrap build --skipPwaValidation
-          cp app-release-signed.apk ../Pulse.apk
+          gradle --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../Pulse.apk
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view android >/dev/null 2>&1 || gh release create android --title "Pulse for Android" --notes "Install Pulse.apk on your phone. It opens the live app, so it updates itself with every deploy."
+          gh release view android >/dev/null 2>&1 || gh release create android --title "Pulse for Android" --notes "Install Pulse.apk on your phone."
+          gh release edit android --notes "Install Pulse.apk on your phone. It opens the live app, so it updates itself with every deploy. Build ${{ github.run_number }}."
           gh release upload android Pulse.apk --clobber
