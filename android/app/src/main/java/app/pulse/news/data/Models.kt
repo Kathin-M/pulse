@@ -151,6 +151,15 @@ data class Controls(
     val cities: List<City> = emptyList(),
     @SerialName("last_ingest") val lastIngest: Ingest? = null,
     val username: String? = null,
+    val stats: Stats = Stats(),
+)
+
+@Serializable
+data class Stats(
+    @SerialName("read_week") val readWeek: Int = 0,
+    @SerialName("liked_week") val likedWeek: Int = 0,
+    val saved: Int = 0,
+    val interests: Int = 0,
 )
 
 @Serializable

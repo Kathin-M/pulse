@@ -20,7 +20,7 @@ function usePreload(cards) {
  * The current card on top, the next one peeking behind at 96% so you always see there is more.
  * `stackRef.current.fly(dir)` lets buttons and arrow keys swipe programmatically.
  */
-export default function Stack({ cards, stackRef, onSwiped, onTap, onDoubleTap, onDragState, onChip, onWhy, enterFrom, empty }) {
+export default function Stack({ cards, stackRef, onSwiped, onTap, onDoubleTap, onDragState, onChip, onWhy, enterFrom, empty, onAction }) {
   usePreload(cards);
   const shownAt = useRef(Date.now());
   const current = cards[0];
@@ -62,6 +62,7 @@ export default function Stack({ cards, stackRef, onSwiped, onTap, onDoubleTap, o
           onDragState={onDragState}
           onChip={onChip}
           onWhy={onWhy}
+          onAction={onAction}
         />
       </motion.div>
     </div>

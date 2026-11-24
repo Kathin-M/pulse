@@ -119,3 +119,30 @@ input[type="range"] { accent-color: var(--accent); }
 .lg-button { font-family: var(--font-sans); color: var(--text); }
 .lg-button--prominent { color: #000; }
 .login-bg { background: radial-gradient(1200px 600px at 20% 10%, rgba(245,165,36,.18), transparent 60%), radial-gradient(900px 500px at 90% 90%, rgba(61,214,140,.10), transparent 60%), var(--bg); }
+
+/* ---- Glass modes ---- */
+/* without the refraction engine there is no droplet element, so mark the selection with CSS */
+:root:not([data-glass="full"]) .lg-segmented > button[aria-pressed="true"],
+:root:not([data-glass="full"]) .lg-tabbar__item[aria-current] {
+  background: rgba(255, 255, 255, .14); border-radius: 999px;
+}
+:root[data-glass="off"] :is(.lg, .lg-button, .lg-segmented, .lg-tabbar, .lg-toolbar, .lg-menu) {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  background: var(--raised) !important; box-shadow: none !important;
+}
+:root[data-glass="off"] :is(.lg, .lg-button, .lg-segmented, .lg-tabbar, .lg-toolbar, .lg-menu)::before { display: none !important; }
+:root[data-glass="off"] .lg-button--prominent { background: var(--accent) !important; }
+
+/* ---- Reels-style action rail ---- */
+.rail-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; font-family: var(--font-sans); font-size: 11px; font-weight: 600; }
+.rail-btn .rail-icon { width: 46px; height: 46px; border-radius: 999px; display: grid; place-items: center; transition: transform .25s cubic-bezier(.3,1.4,.4,1); }
+.rail-btn:active .rail-icon { transform: scale(1.15); }
+.rail-light { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.rail-light .rail-icon { background: rgba(0,0,0,.28); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.rail-dark { color: var(--text); }
+.rail-dark .rail-icon { background: var(--raised); }
+:root[data-glass="off"] .rail-light .rail-icon { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0,0,0,.45); }
+
+/* ---- swipe hint markers ---- */
+.hint { font-family: var(--font-sans); font-size: 12px; font-weight: 700; letter-spacing: .02em; color: rgba(255,255,255,.85);
+  background: rgba(0,0,0,.48); padding: 5px 10px; border-radius: 999px; text-shadow: 0 1px 2px rgba(0,0,0,.5); }

@@ -101,6 +101,19 @@ function ThreadView({ thread, onClose, onOpen, notify }) {
   );
 }
 
+/** Faint markers on the card edges showing what each swipe does. Turn off in Controls → Look & feel. */
+function SwipeHints({ dragging }) {
+  // markers sit astride the card edges (half outside), so they never cover the story
+  return (
+    <div className={`pointer-events-none absolute inset-x-3 top-4 bottom-4 z-20 transition-opacity duration-300 ${dragging ? "opacity-0" : "opacity-100"}`}>
+      <span className="hint absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">↑ Fine</span>
+      <span className="hint absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2">↓ Less</span>
+      <span className="hint absolute left-0 top-[46%] -translate-x-1/4">‹ Seen</span>
+      <span className="hint absolute right-0 top-[18%] translate-x-1/4">More ›</span>
+    </div>
+  );
+}
+
 export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, onGoControls, notify }) {
   const [mode, setMode] = useState("foryou");
   const [queue, setQueue] = useState(null);
@@ -113,6 +126,7 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
   const [ingest, setIngest] = useState(null);
   const [error, setError] = useState(null);
   const sessionStart = useRef(new Date());
+  const hints = localStorage.getItem("pulse.hints") !== "off";
   const swipedIds = useRef(new Set());
   const sinceRefresh = useRef(0);
   const stackRef = useRef(null);
@@ -234,7 +248,8 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 px-3 pt-1 pb-2">
+      <div className={`flex-1 min-h-0 px-3 relative ${hints ? "pt-4 pb-4" : "pt-1 pb-2"}`}>
+        {hints && !!queue?.length && <SwipeHints dragging={dragging} />}
         {queue === null ? (
           <div className="h-full rounded-[20px] bg-surface animate-pulse" />
         ) : error && !queue.length ? (
@@ -262,25 +277,14 @@ export default function Feed({ onOpen, onNeedsOnboarding, onDragging, onGoSeen, 
             onDragState={setDrag}
             onChip={(c) => setChip(c)}
             onWhy={onGoControls}
+            onAction={(c, action) => {
+              if (action === "share") share(c);
+              else if (action === "sources") onOpen(c.id > 0 ? c.id : c.story_ids[0]);
+              else if (c.id > 0) interact(c.id, action).then(() => notify(action === "save" ? "Saved for later" : "Removed from saved")).catch(() => {});
+            }}
             empty={<CaughtUp since={sessionStart.current} mode={mode} ingest={ingest} empty={done === 0} onSeen={onGoSeen} onRefresh={() => load(mode)} />}
           />
         )}
-      </div>
-
-      {/* thumb-reach actions in a glass toolbar (also what the gestures do) */}
-      <div className={`flex justify-center px-3 pb-1 transition-opacity duration-200 ${dragging || !queue?.length ? "opacity-0 pointer-events-none" : ""}`}>
-        <div className="lg-toolbar" data-liquid-glass="regular">
-          <button onClick={() => stackRef.current?.fly("left")} aria-label="Seen">← Seen</button>
-          <button onClick={() => stackRef.current?.fly("down")} aria-label="Less like this">↓ Less</button>
-          <hr />
-          <button onClick={() => queue?.[0] && share(queue[0])} aria-label="Share">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13" /><path d="m7 8 5-5 5 5" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>
-            Share
-          </button>
-          <hr />
-          <button onClick={() => stackRef.current?.fly("up")} aria-label="Fine">↑ Fine</button>
-          <button onClick={() => stackRef.current?.fly("right")} aria-label="More like this" className="!text-accent">More →</button>
-        </div>
       </div>
 
       <AnimatePresence>{chip && <ChipMenu chip={chip} onClose={() => setChip(null)} notify={notify} />}</AnimatePresence>

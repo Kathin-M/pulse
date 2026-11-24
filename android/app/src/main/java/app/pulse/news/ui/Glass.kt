@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -85,12 +86,23 @@ fun rimBrush(strength: Float = GlassTokens.rimStrength()): Brush = Brush.linearG
     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
 )
 
-fun Modifier.glass(shape: Shape, tint: Color, rim: Brush, elevation: Dp = 10.dp): Modifier = this
-    .shadow(elevation, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.3f))
-    .clip(shape)
-    .background(tint)
-    .background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.07f), 0.5f to Color.Transparent))   // inner glow
-    .border(1.dp, rim, shape)
+/** Glass material. Respects the "Glass effects" setting: full, light (no shadow/glow) or off (flat, solid). */
+fun Modifier.glass(shape: Shape, tint: Color, rim: Brush, elevation: Dp = 10.dp, indicator: Boolean = false): Modifier = composed {
+    val c = LocalColors.current
+    when (app.pulse.news.data.Store.glass) {
+        "off" -> this.clip(shape).background(if (indicator) tint else c.raised)
+        "light" -> this.clip(shape).background(tint).border(1.dp, rim, shape)
+        else -> this
+            .shadow(elevation, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.3f))
+            .clip(shape)
+            .background(tint)
+            .background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.07f), 0.5f to Color.Transparent))   // inner glow
+            .border(1.dp, rim, shape)
+    }
+}
+
+/** Spring "lens" scale on press, only with full glass effects. */
+private fun lensScale(pressed: Boolean, amount: Float) = if (pressed && app.pulse.news.data.Store.glass == "full") amount else 1f
 
 @Composable
 fun GlassSurface(
@@ -108,7 +120,7 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
     val c = LocalColors.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val lens by animateFloatAsState(if (pressed) 1.12f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f), label = "lens")
+    val lens by animateFloatAsState(lensScale(pressed, 1.12f), spring(dampingRatio = 0.45f, stiffness = 500f), label = "lens")
     GlassSurface(modifier.height(44.dp)) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(3.dp)) {
             val segW = maxWidth / options.size
@@ -116,7 +128,7 @@ fun GlassSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit
             Box(
                 Modifier.offset(x = x).width(segW).fillMaxHeight()
                     .graphicsLayer { scaleX = lens; scaleY = lens * 1.08f }
-                    .glass(RoundedCornerShape(50), GlassTokens.indicator(), rimBrush(0.6f), elevation = 3.dp)
+                    .glass(RoundedCornerShape(50), GlassTokens.indicator(), rimBrush(0.6f), elevation = 3.dp, indicator = true)
             )
             Row(Modifier.fillMaxSize()) {
                 options.forEachIndexed { i, label ->
@@ -141,7 +153,7 @@ fun GlassTabBar(items: List<TabItem>, selected: Int, onSelect: (Int) -> Unit, mo
     val c = LocalColors.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val lens by animateFloatAsState(if (pressed) 1.1f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f), label = "lens")
+    val lens by animateFloatAsState(lensScale(pressed, 1.1f), spring(dampingRatio = 0.45f, stiffness = 500f), label = "lens")
     GlassSurface(modifier.height(62.dp), shape = RoundedCornerShape(31.dp)) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)) {
             val segW = maxWidth / items.size
@@ -149,7 +161,7 @@ fun GlassTabBar(items: List<TabItem>, selected: Int, onSelect: (Int) -> Unit, mo
             if (selected >= 0) Box(
                 Modifier.offset(x = x).width(segW).fillMaxHeight()
                     .graphicsLayer { scaleX = lens; scaleY = lens * 1.06f }
-                    .glass(RoundedCornerShape(27.dp), GlassTokens.indicator().copy(alpha = if (c.dark) 0.14f else 0.75f), rimBrush(0.5f), elevation = 2.dp)
+                    .glass(RoundedCornerShape(27.dp), GlassTokens.indicator().copy(alpha = if (c.dark) 0.14f else 0.75f), rimBrush(0.5f), elevation = 2.dp, indicator = true)
             )
             Row(Modifier.fillMaxSize()) {
                 items.forEachIndexed { i, item ->
@@ -175,7 +187,7 @@ fun GlassIconButton(icon: ImageVector, contentDescription: String, enabled: Bool
     val c = LocalColors.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 1.1f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f), label = "press")
+    val s by animateFloatAsState(lensScale(pressed, 1.1f), spring(dampingRatio = 0.45f, stiffness = 500f), label = "press")
     GlassSurface(
         Modifier.size(size).scale(s).clickable(enabled = enabled, interactionSource = interaction, indication = null) { onClick() },
         shape = CircleShape,
@@ -202,7 +214,7 @@ fun RowScope.ToolbarButton(text: String, icon: ImageVector? = null, color: Color
     val c = LocalColors.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) 1.12f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f), label = "press")
+    val s by animateFloatAsState(lensScale(pressed, 1.12f), spring(dampingRatio = 0.45f, stiffness = 500f), label = "press")
     Row(
         Modifier.weight(1f).fillMaxHeight().scale(s).clip(RoundedCornerShape(50))
             .clickable(interactionSource = interaction, indication = null) { onClick() },
@@ -240,4 +252,8 @@ object PulseIcons {
     val Controls = strokeIcon("controls", "M4 7h10", "M18 7h2", "M4 17h4", "M12 17h8", "M16 5a2 2 0 1 1 0 4a2 2 0 0 1 0-4z", "M10 15a2 2 0 1 1 0 4a2 2 0 0 1 0-4z")
     val Undo = strokeIcon("undo", "M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11")
     val Share = strokeIcon("share", "M12 3v13", "m7 8 5-5 5 5", "M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6")
+    val Heart = strokeIcon("heart", "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
+    val Bookmark = strokeIcon("bookmark", "M6 3.5h12v17l-6-4-6 4z")
+    val Send = strokeIcon("send", "M21 3 10 14", "m21 3-7 18-4-7-7-4z")
+    val Sources = strokeIcon("sources", "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z", "M8 9h8", "M8 13h8", "M8 17h5")
 }

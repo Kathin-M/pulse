@@ -62,6 +62,7 @@ fun CardStack(
     onDragging: (Boolean) -> Unit = {},
     onChip: (ChipRef) -> Unit = {},
     onWhy: () -> Unit = {},
+    onAction: ((Card, String) -> Unit)? = null,
     empty: @Composable () -> Unit,
 ) {
     val top = cards.firstOrNull()
@@ -90,6 +91,7 @@ fun CardStack(
                     onDragging = onDragging,
                     onChip = onChip,
                     onWhy = onWhy,
+                    onAction = onAction?.let { f -> { a: String -> f(top, a) } },
                 )
             }
         }
@@ -260,7 +262,7 @@ fun FeedScreen(
             Text("Offline: showing your last feed", style = Type.chip, color = c.text2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp))
         }
 
-        Box(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Box(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = if (Store.hints) 14.dp else 4.dp)) {
             when {
                 !loaded -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(c.surface))
                 error != null && queue.isEmpty() && !offline -> Column(
@@ -288,21 +290,22 @@ fun FeedScreen(
                     onDragging = { dragging = it; onDragging(it) },
                     onChip = { chip = it },
                     onWhy = onGoControls,
+                    onAction = { card, action ->
+                        when (action) {
+                            "share" -> shareStory(ctx, card, scope)
+                            "sources" -> onOpen(card.storyIdForDetail)
+                            else -> if (card.id > 0) scope.launch {
+                                runCatching { Api.interact(card.id, action) }
+                                    .onSuccess { Toaster.show(if (action == "save") "Saved for later" else "Removed from saved") }
+                            }
+                        }
+                    },
                     empty = { CaughtUp(sessionStart, done == 0, mode, ingest, offline && queue.isEmpty(), onGoSeen) { load() } },
                 )
             }
+            if (Store.hints && queue.isNotEmpty()) SwipeHints(dragging, Modifier.matchParentSize())
         }
 
-        // thumb-reach actions in a glass toolbar (also what the gestures do)
-        GlassToolbar(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).alpha(if (dragging || queue.isEmpty()) 0f else 1f)) {
-            ToolbarButton("← Seen") { controller.swipe("left") }
-            ToolbarButton("↓ Less") { controller.swipe("down") }
-            GlassDivider()
-            ToolbarButton("Share", icon = PulseIcons.Share) { queue.firstOrNull()?.let { shareStory(ctx, it, scope) } }
-            GlassDivider()
-            ToolbarButton("↑ Fine") { controller.swipe("up") }
-            ToolbarButton("More →", color = c.accent) { controller.swipe("right") }
-        }
     }
 
     chip?.let { ChipSheet(it) { chip = null } }

@@ -154,7 +154,8 @@ private fun ThreadHeadlines(card: Card) {
 
 /** One story card in one of three layouts, picked from the lead image's quality at ingest. */
 @Composable
-fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Unit = {}, onWhy: () -> Unit = {}) {
+fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Unit = {}, onWhy: () -> Unit = {}, rail: Boolean = false) {
+    val railPad = if (rail) 64.dp else 20.dp
     val c = LocalColors.current
     val shape = RoundedCornerShape(20.dp)
     val edge = if (card.badge == "Breaking") Modifier.border(2.dp, c.accent, shape) else Modifier
@@ -171,7 +172,7 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
                 )
             )
             Box(Modifier.padding(16.dp).align(Alignment.TopStart)) { Badge(card) }
-            Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
+            Column(Modifier.fillMaxSize().padding(start = 20.dp, end = railPad, bottom = 20.dp, top = 56.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom)) {
                 SourceRow(card, light = true)
                 Text(title, style = headStyle, color = Color.White)
                 UpdateLine(card, light = true)
@@ -187,7 +188,7 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
                 NewsImage(card.image, card.lqip, Modifier.fillMaxSize())
                 Box(Modifier.padding(16.dp)) { Badge(card) }
             }
-            Column(Modifier.weight(1f).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f).padding(start = 20.dp, top = 20.dp, bottom = 20.dp, end = railPad), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SourceRow(card, light = false)
                 Text(title, style = Type.headline, color = c.text)
                 UpdateLine(card, light = false)
@@ -206,7 +207,7 @@ fun CardView(card: Card, modifier: Modifier = Modifier, onChip: (ChipRef) -> Uni
         }
 
         // Text-only editorial card: the outlet name set large is the visual.
-        else -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        else -> Column(modifier.fillMaxSize().clip(shape).background(c.surface).then(edge).padding(start = 24.dp, top = 24.dp, bottom = 24.dp, end = if (rail) 64.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Badge(card)
             Text(
                 card.publisher, fontFamily = Newsreader, fontWeight = FontWeight.SemiBold,

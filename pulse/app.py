@@ -528,9 +528,16 @@ def controls(uid: int = Depends(current_user), db=Depends(get_db)):
                      "trust": o.get("trust", s.get("trust", 0.6)), "enabled": o.get("enabled", True),
                      "error": s.get("last_error"), "dead": dead, "articles_3d": counts.get(s["_id"], 0)})
     user = db.users.find_one({"_id": uid}, {"username": 1}) or {}
+    week_ago = D.now() - timedelta(days=7)
+    stats = {
+        "read_week": db.state.count_documents({"uid": uid, "seen_at": {"$gte": week_ago}}),
+        "liked_week": db.state.count_documents({"uid": uid, "status": "liked", "liked_at": {"$gte": week_ago}}),
+        "saved": db.state.count_documents({"uid": uid, "saved": True}),
+        "interests": db.clusters.count_documents({"uid": uid, "polarity": 1}),
+    }
     return {"prefs": prefs, "rules": rules, "sources": srcs, "topics": list(TOPICS.keys()),
             "cities": [{"name": c, "state": v[0]} for c, v in CITIES.items()],
-            "last_ingest": D.get_setting(db, "last_ingest"), "username": user.get("username")}
+            "last_ingest": D.get_setting(db, "last_ingest"), "username": user.get("username"), "stats": stats}
 
 
 class PrefsIn(BaseModel):

@@ -20,9 +20,14 @@ registerSW({
   },
 });
 
-// Liquid glass components (segmented control, tab bar, toolbar, switches, sliders).
-// observe: React mounts screens later, so new glass elements are enhanced as they appear.
-LiquidGlass.init({ observe: true, light: "pointer" });
+// Glass effects: "full" = liquid-glass refraction (heaviest), "light" = the library's CSS frosted
+// fallback (no refraction engine), "off" = flat surfaces (lightest on the phone).
+const glass = localStorage.getItem("pulse.glass") || "full";
+document.documentElement.dataset.glass = glass;
+if (glass === "full") {
+  // observe: React mounts screens later, so new glass elements are enhanced as they appear.
+  LiquidGlass.init({ observe: true, light: "pointer" });
+}
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

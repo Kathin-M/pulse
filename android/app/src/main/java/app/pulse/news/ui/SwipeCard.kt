@@ -65,6 +65,7 @@ fun SwipeCard(
     onDragging: (Boolean) -> Unit,
     onChip: (ChipRef) -> Unit,
     onWhy: () -> Unit,
+    onAction: ((String) -> Unit)? = null,
 ) {
     val c = LocalColors.current
     val view = LocalView.current
@@ -154,7 +155,18 @@ fun SwipeCard(
                     rotationZ = (x / w * 8f).coerceIn(-8f, 8f)
                 }
         ) {
-            CardView(card, onChip = onChip, onWhy = onWhy)
+            CardView(card, onChip = onChip, onWhy = onWhy, rail = onAction != null)
+            if (onAction != null) {
+                ActionRail(
+                    card = card,
+                    light = card.layout == "full" && card.image != null,
+                    onLike = { fly("right") },
+                    onSave = { on -> onAction(if (on) "save" else "unsave") },
+                    onShare = { onAction("share") },
+                    onSources = { onAction("sources") },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 150.dp),
+                )
+            }
 
             // decision labels fade in with drag distance
             Label("More like this", c.more, ((x - 20f) / 120f).coerceIn(0f, 1f), Modifier.align(Alignment.TopStart).padding(22.dp).rotate(-6f))

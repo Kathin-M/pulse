@@ -19,6 +19,9 @@ object Store {
         cacheDir = ctx.filesDir
         theme = sp.getString("theme", "system") ?: "system"
         textScale = sp.getFloat("text_scale", 1f)
+        glass = sp.getString("glass", "full") ?: "full"
+        hints = sp.getBoolean("hints", true)
+        haptics = sp.getBoolean("haptics", true)
     }
 
     /** The Pulse server; defaults to the one this build was made for, so new users only need an account. */
@@ -43,6 +46,18 @@ object Store {
         private set
     var textScale by mutableFloatStateOf(1f)
         private set
+
+    /** Glass effects: "full" (rims, highlights, shadows, lens animations), "light" (no shadows/animations), "off" (flat). */
+    var glass by mutableStateOf("full")
+        private set
+    var hints by mutableStateOf(true)
+        private set
+    var haptics by mutableStateOf(true)
+        private set
+
+    fun changeGlass(v: String) { glass = v; sp.edit().putString("glass", v).apply() }
+    fun changeHints(v: Boolean) { hints = v; sp.edit().putBoolean("hints", v).apply() }
+    fun changeHaptics(v: Boolean) { haptics = v; sp.edit().putBoolean("haptics", v).apply() }
 
     fun changeTheme(v: String) { theme = v; sp.edit().putString("theme", v).apply() }
     fun changeTextScale(v: Float) { textScale = v; sp.edit().putFloat("text_scale", v).apply() }

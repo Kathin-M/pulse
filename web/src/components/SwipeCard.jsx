@@ -1,15 +1,16 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { animate, motion, useMotionValue, useTransform } from "motion/react";
 import Card from "./Card.jsx";
+import ActionRail from "./ActionRail.jsx";
 import { haptic } from "../api.js";
 
 const EXIT_MS = 0.18;
 
 /**
- * One draggable card. Right = more like this, left = seen, down = less like this.
+ * One draggable card. Right = more like this, left = seen, up = fine, down = less like this.
  * Release past ~35% of the width (or flick) to commit; otherwise it springs back.
  */
-const SwipeCard = forwardRef(function SwipeCard({ card, onSwipe, onTap, onDoubleTap, onDragState, onChip, onWhy, enterFrom }, ref) {
+const SwipeCard = forwardRef(function SwipeCard({ card, onSwipe, onTap, onDoubleTap, onDragState, onChip, onWhy, enterFrom, onAction }, ref) {
   const box = useRef(null);
   const x = useMotionValue(enterFrom === "left" ? -600 : enterFrom === "right" ? 600 : 0);
   const y = useMotionValue(enterFrom === "down" ? 800 : enterFrom === "up" ? -800 : 0);
@@ -85,7 +86,17 @@ const SwipeCard = forwardRef(function SwipeCard({ card, onSwipe, onTap, onDouble
         tapTimer.current = setTimeout(() => onTap?.(), 280);
       }}
     >
-      <Card card={card} onChip={onChip} onWhy={onWhy} />
+      <Card card={card} onChip={onChip} onWhy={onWhy} rail />
+      {onAction && (
+        <ActionRail
+          card={card}
+          light={card.layout === "full" && !!card.image}
+          onLike={() => fly("right")}
+          onSave={(on) => onAction(card, on ? "save" : "unsave")}
+          onShare={() => onAction(card, "share")}
+          onSources={() => onAction(card, "sources")}
+        />
+      )}
       {/* Swipe feedback labels fade in with drag distance */}
       <motion.div style={{ opacity: moreOpacity }} className="pointer-events-none absolute top-6 left-6 px-3 py-1.5 rounded-lg border-2 border-more text-more t-meta font-bold bg-black/40 -rotate-6">
         More like this

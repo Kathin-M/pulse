@@ -90,6 +90,7 @@ fun decodeLqip(dataUri: String?): ImageBitmap? = runCatching {
 }.getOrNull()
 
 fun haptic(view: View, strong: Boolean = false) {
+    if (!app.pulse.news.data.Store.haptics) return
     val c = if (Build.VERSION.SDK_INT >= 30) {
         if (strong) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.CLOCK_TICK
     } else HapticFeedbackConstants.VIRTUAL_KEY

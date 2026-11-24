@@ -110,7 +110,8 @@ function ThreadStack({ card }) {
   );
 }
 
-export default function Card({ card, onChip, onWhy }) {
+export default function Card({ card, onChip, onWhy, rail }) {
+  const pr = rail ? "pr-16" : "";
   const breaking = card.badge === "Breaking";
   const edge = breaking ? "ring-2 ring-accent" : "";
   const title = card.type === "thread" ? card.thread_title : card.title;
@@ -126,7 +127,7 @@ export default function Card({ card, onChip, onWhy }) {
           style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.85) 100%)" }}
         />
         <div className="absolute top-4 left-4"><Badge card={card} light /></div>
-        <div className="absolute inset-x-0 bottom-0 top-14 p-5 flex flex-col justify-end gap-3 text-white overflow-hidden">
+        <div className={`absolute inset-x-0 bottom-0 top-14 p-5 ${pr} flex flex-col justify-end gap-3 text-white overflow-hidden`}>
           <SourceRow card={card} light />
           <h2 className={`${big} shrink-0`}>{title}</h2>
           <UpdateLine card={card} light />
@@ -145,7 +146,7 @@ export default function Card({ card, onChip, onWhy }) {
           <Img card={card} className="absolute inset-0" />
           <div className="absolute top-4 left-4"><Badge card={card} light /></div>
         </div>
-        <div className="flex-1 min-h-0 p-5 flex flex-col gap-3">
+        <div className={`flex-1 min-h-0 p-5 ${pr} flex flex-col gap-3`}>
           <SourceRow card={card} />
           <h2 className="t-headline shrink-0">{title}</h2>
           <UpdateLine card={card} />
@@ -165,7 +166,7 @@ export default function Card({ card, onChip, onWhy }) {
 
   // Text-only editorial card: the outlet name set large is the visual.
   return (
-    <div className={`h-full w-full rounded-[20px] overflow-hidden bg-surface p-6 flex flex-col gap-4 ${edge}`}>
+    <div className={`h-full w-full rounded-[20px] overflow-hidden bg-surface p-6 ${pr} flex flex-col gap-4 ${edge}`}>
       <div className="flex items-center gap-3">
         <Badge card={card} />
       </div>
