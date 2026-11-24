@@ -1,10 +1,8 @@
 package app.pulse.news.update
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.provider.Settings
 import app.pulse.news.BuildConfig
 import app.pulse.news.data.Api
@@ -56,7 +54,11 @@ object Updater {
         }
     }
 
-    /** Download with the system download manager, then hand the APK to Android's installer. */
+    /**
+     * Download the APK ourselves (same DNS fallback as the API), then install it through Android's
+     * PackageInstaller session API. Unlike opening a downloaded file, this works on phones whose
+     * installers refuse content:// download URIs (common on Xiaomi, Realme, Oppo, Vivo).
+     */
     fun install(ctx: Context, rel: Release) {
         if (!ctx.packageManager.canRequestPackageInstalls()) {
             Toaster.show("Allow Pulse to install updates, then tap Update again")
@@ -66,37 +68,51 @@ object Updater {
             )
             return
         }
-        val dm = ctx.getSystemService(DownloadManager::class.java)
-        val file = "Pulse-${rel.versionCode}.apk"
-        ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.resolve(file)?.delete()
-        val id = dm.enqueue(
-            DownloadManager.Request(Uri.parse(rel.apkUrl))
-                .setTitle("Pulse ${rel.versionName}")
-                .setMimeType("application/vnd.android.package-archive")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, file)
-        )
         Toaster.show("Downloading update…")
         CoroutineScope(Dispatchers.Main).launch {
-            while (true) {
-                delay(700)
-                val status = withContext(Dispatchers.IO) {
-                    dm.query(DownloadManager.Query().setFilterById(id)).use { cur ->
-                        if (cur.moveToFirst()) cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) else DownloadManager.STATUS_FAILED
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val installer = ctx.packageManager.packageInstaller
+                    val params = android.content.pm.PackageInstaller.SessionParams(android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                    params.setAppPackageName(ctx.packageName)
+                    val sessionId = installer.createSession(params)
+                    installer.openSession(sessionId).use { session ->
+                        Api.http.newCall(Request.Builder().url(rel.apkUrl).build()).execute().use { res ->
+                            if (!res.isSuccessful) error("download failed: ${res.code}")
+                            val body = res.body ?: error("empty download")
+                            session.openWrite("pulse.apk", 0, body.contentLength()).use { out ->
+                                body.byteStream().use { it.copyTo(out) }
+                                session.fsync(out)
+                            }
+                        }
+                        val callback = android.app.PendingIntent.getBroadcast(
+                            ctx, sessionId,
+                            Intent(ctx, InstallResultReceiver::class.java),
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE,
+                        )
+                        session.commit(callback.intentSender)
                     }
-                }
-                if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    val uri = dm.getUriForDownloadedFile(id)
-                    ctx.startActivity(
-                        Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                    break
-                }
-                if (status == DownloadManager.STATUS_FAILED) {
-                    Toaster.show("Update download failed. Try again later.")
-                    break
-                }
+                    true
+                }.getOrElse { false }
+            }
+            if (!ok) Toaster.show("Update download failed. Check your connection and try again.")
+        }
+    }
+}
+
+/** Receives the installer's result; when Android needs the user to confirm, shows its install prompt. */
+class InstallResultReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS, -999)) {
+            android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                @Suppress("DEPRECATION")
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            android.content.pm.PackageInstaller.STATUS_SUCCESS -> Unit
+            else -> {
+                val msg = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
+                android.widget.Toast.makeText(context, "Update not installed${msg?.let { ": $it" } ?: ""}", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

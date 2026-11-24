@@ -17,6 +17,8 @@
         android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true">
 
+        <receiver android:name=".update.InstallResultReceiver" android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
