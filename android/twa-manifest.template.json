@@ -30,6 +30,6 @@
   "isChromeOSOnly": false,
   "isMetaQuest": false,
   "fullScopeUrl": "https://${PULSE_HOST}/",
-  "minSdkVersion": 21,
+  "minSdkVersion": 24,
   "retainedBundles": []
 }
