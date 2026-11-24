@@ -15,3 +15,4 @@ web/dist/
 web/dev-dist/
 # misc
 .DS_Store
+.env*
